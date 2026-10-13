@@ -41,7 +41,7 @@ flowchart TD
 ## 2. Core Architecture & Routing Strategies
 
 ### Multi-Stage Routing Pipeline
-A Principal Engineer-grade routing engine requires balancing classification overhead against token savings. SLM_Router utilizes a multi-tiered pipeline:
+An effective routing engine balances classification overhead against token savings. SLM_Router utilizes a multi-tiered pipeline:
 
 1. **Stage 0: Heuristic Pre-filter (< 1ms)**
    - Regex-based intent detection (simple greetings, exact format requests, system prompts).
@@ -89,7 +89,7 @@ A Principal Engineer-grade routing engine requires balancing classification over
 
 ## 5. Project Roadmap
 
-- [x] Initial repository setup & agent workflow rules ([GEMINI.md](GEMINI.md))
+- [x] Initial repository setup & development guidelines ([GEMINI.md](GEMINI.md))
 - [x] Package manifests & environment hygiene configuration
 - [ ] Comprehensive Product Requirements Document (PRD)
 - [ ] FastAPI gateway skeleton with OpenAI-compatible `/v1/chat/completions` endpoint
