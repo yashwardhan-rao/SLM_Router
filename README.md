@@ -91,7 +91,7 @@ An effective routing engine balances classification overhead against token savin
 
 - [x] Initial repository setup & development guidelines ([GEMINI.md](GEMINI.md))
 - [x] Package manifests & environment hygiene configuration
-- [ ] Comprehensive Product Requirements Document (PRD)
+- [x] Comprehensive Product Requirements Document ([PRD.md](docs/PRD.md))
 - [ ] FastAPI gateway skeleton with OpenAI-compatible `/v1/chat/completions` endpoint
 - [ ] Stage 0 + Stage 1 Routing Scorer implementation
 - [ ] Provider integrations (Ollama, Groq, OpenAI, Anthropic via unified interface)
