@@ -1,245 +1,233 @@
 # Product Requirements Document (PRD)
 
-## Project: SLM_Router
+# Project: SLM_Router
 **Version:** 1.0.0  
-**Status:** Approved  
-**Author:** SLM_Router Core Team  
-**Last Updated:** October 2026  
+**Status:** Approved / In Development  
+**Target Release:** v1.0 MVP  
+**Category:** Developer Tooling / AI Infrastructure  
 
 ---
 
-## 1. Executive Summary & Problem Statement
+## 1. Executive Summary & Problem Definition
 
-### 1.1 Context & Problem
-Modern AI applications predominantly route 100% of user queries to frontier Large Language Models (LLMs) such as GPT-4o, Claude 3.5 Sonnet, or Gemini 1.5 Pro. These models incur substantial costs ($2.50 to $15.00+ per 1M output tokens) and introduce significant inference latency.
+### 1.1 The Problem
+In modern generative AI systems, developers routinely route 100% of user traffic to high-tier frontier models (e.g., GPT-4o, Claude 3.5 Sonnet, Gemini 1.5 Pro). However, empirical analysis of production workloads demonstrates that **65% to 85% of incoming queries are mechanically simple**:
+- Factual extraction and regex-style formatting
+- Short-form classification and sentiment tagging
+- Text summarization of clear source documents
+- Routine conversational banter and simple tool dispatching
 
-Empirical analysis shows that **65% to 85% of standard user requests** (e.g., classification, structured JSON extraction, summarization, direct factual lookups, boilerplate code generation) can be executed with indistinguishable accuracy by Small Language Models (SLMs) in the 1B to 8B parameter range (e.g., Llama 3.2, Qwen 2.5, Phi-3.5).
+Paying frontier prices ($2.50 to $15.00+ per million tokens) for low-complexity queries results in:
+1. **Excessive API Expenditures:** Startups and enterprises burn thousands of dollars monthly on tasks capable of being handled by smaller models.
+2. **Elevated Latency:** Frontier models exhibit higher Time-to-First-Token (TTFT) and slower generation speeds compared to specialized Small Language Models (SLMs) running locally or on high-speed inference engines (e.g., Groq, Cerebras).
+3. **Privacy Vulnerability:** Internal data is unnecessarily sent over the public internet to third-party providers when private, on-premise SLMs could satisfy the prompt.
 
-### 1.2 Solution
-**SLM_Router** is an intelligent reverse-proxy gateway that presents an OpenAI-compatible API (`/v1/chat/completions`) and dynamically evaluates incoming prompt complexity, domain intent, and user constraints. It routes simple and moderate queries to fast, cost-effective SLMs (local or cloud-hosted) while escalating complex, multi-step reasoning tasks to frontier models.
+### 1.2 The Opportunity
+The rapid rise of sub-8B models (Llama 3.2 1B/3B, Qwen 2.5 0.5B–7B, Phi-3.5 3.8B) delivers near-frontier accuracy on narrow and moderate tasks at a fraction of the cost ($0.05 to $0.20 per million tokens, or free on local hardware).
 
-### 1.3 Target Value Metrics
-- **Cost Reduction:** Up to 70–80% reduction in aggregate token expenditures across blended workloads.
-- **Latency Optimization:** 3x to 5x reduction in Time-to-First-Token (TTFT) for simple queries routed to local hardware or ultra-fast cloud inference engines (e.g., Groq).
-- **Zero Client Overhead:** Seamless drop-in replacement requiring only a change of `base_url` in standard OpenAI SDK clients.
-
----
-
-## 2. System Architecture & Routing Flow
-
-```mermaid
-flowchart TD
-    Client(["Client Application (OpenAI SDK / LangChain / Curl)"]) -->|POST /v1/chat/completions| Gateway["FastAPI Gateway Engine"]
-    
-    subgraph Pipeline ["Intelligent Routing Pipeline"]
-        Gateway --> S0["Stage 0: Deterministic Fast-Path (<1ms)\n- Exact regex matches\n- Length & structure heuristics\n- Semantic cache lookup"]
-        S0 -->|Cache Miss / Ambiguous| S1["Stage 1: Semantic Complexity Scorer (10-20ms)\n- Lightweight ONNX Embedding / Intent Classifier\n- Outputs: Complexity (Low/Med/High) & Domain"]
-        S1 --> S2{"Stage 2: Policy & Constraint Dispatcher\nEvaluate against user budget & privacy mode"}
-    end
-
-    S2 -->|"Low Complexity / Local Mode"| LocalSLM["Local SLM (Ollama / vLLM)\nLlama-3.2 3B, Qwen-2.5 7B"]
-    S2 -->|"Low-Med / Latency Priority"| CloudSLM["Cloud SLM (Groq / Together / DeepInfra)\nLlama-3.1 8B Instant"]
-    S2 -->|"High Complexity / Server Hardware"| LocalHeavy["Local Frontier (vLLM)\nQwen-2.5 32B/72B, DeepSeek-R1"]
-    S2 -->|"High Reasoning / Frontier Cloud"| CloudFrontier["Frontier Cloud APIs\nClaude 3.5 Sonnet, GPT-4o"]
-
-    LocalSLM -.->|Validation Failure / Low Confidence| FallbackGuard["Stage 3: Fallback Escalation"]
-    CloudSLM -.->|Timeout / Format Failure| FallbackGuard
-    FallbackGuard --> CloudFrontier
-
-    LocalSLM --> Aggregator["Telemetry & Response Aggregator"]
-    CloudSLM --> Aggregator
-    LocalHeavy --> Aggregator
-    CloudFrontier --> Aggregator
-    FallbackGuard --> Aggregator
-    Aggregator --> Client
-```
+### 1.3 The Solution: SLM_Router
+**SLM_Router** is an intelligent, drop-in reverse proxy adhering to the standard OpenAI API specification (`/v1/chat/completions`). It inspects query intent and semantic complexity in milliseconds, routing low-complexity requests to lightweight SLMs (local or cloud) while seamlessly reserving expensive frontier models for deep reasoning, mathematics, and complex multi-step coding.
 
 ---
 
-## 3. Functional Requirements
+## 2. Product Pillars & Value Proposition
 
-### 3.1 Gateway & Proxy Layer
-1. **OpenAI Protocol Compliance:**
-   - Implement `POST /v1/chat/completions` supporting both standard JSON responses and Server-Sent Events (SSE) streaming (`stream: true`).
-   - Implement `GET /v1/models` returning registered local and cloud models.
-   - Forward system instructions, tool definitions (`tools`), formatting constraints (`response_format: {"type": "json_object"}`), and temperature/top-p settings transparently.
-2. **Authentication & Rate Limiting:**
-   - Support optional bearer token validation for incoming client requests.
-   - Secure management of downstream provider API keys via environment variables or secret vaults.
+| Pillar | Principle | User Value |
+| :--- | :--- | :--- |
+| **Zero-Friction Adoption** | Strict 100% OpenAI API wire-compatibility. | Developers switch one line of code (`base_url = "http://localhost:8000/v1"`) with zero codebase refactoring. |
+| **Aggressive Cost Compression** | Target 60–80% overall token cost savings. | Immediate, measurable reduction in monthly inference expenses without quality degradation. |
+| **Predictable Reliability** | Fail-safe routing and automatic escalation. | If an SLM produces invalid output or a provider times out, the router automatically fails over to a frontier model. |
+| **Complete Transparency** | Real-time telemetry on latency, dollars saved, and route rationale. | Teams can audit exactly why a model was chosen and verify output quality through an interactive UI. |
 
-### 3.2 Multi-Stage Routing Engine
+---
 
-#### Stage 0: Heuristic Fast-Path (< 1 ms)
-- **Deterministic Rules:** Evaluates prompt length (character/token count), regex matching for conversational greetings, basic format conversions, and explicit developer model overrides via header (`x-router-target-model`).
-- **Semantic Cache:** In-memory / Redis cache storing hash keys of deterministic queries; returns cached responses instantly when similarity threshold $\ge 0.98$.
+## 3. Target User Personas & Jobs-to-be-Done (JTBD)
 
-#### Stage 1: Semantic Complexity Scorer (10–20 ms)
-- **Model:** Lightweight ONNX-runtime cross-encoder or sub-billion embedding model (e.g., `all-MiniLM-L6-v2` or quantized `BGE-small`).
-- **Feature Extraction:**
-  - Semantic complexity score: `[0.0, 1.0]` mapping to `Simple`, `Moderate`, or `Complex`.
-  - Intent classification: `Coding`, `Mathematics / Formal Logic`, `Factual Extraction`, `Summarization`, `Creative Writing`, `Casual Q&A`.
-  - Structural constraints: Preserved multi-turn history depth, code-fence frequency, JSON schema presence.
+### 3.1 Personas
 
-#### Stage 2: Policy & Constraint Dispatcher
-- Dispatches each request according to an active policy profile:
-  1. **Cost-Optimizer (Default):** Routes `Simple` $\rightarrow$ Local SLM; `Moderate` $\rightarrow$ Cloud SLM; `Complex` $\rightarrow$ Cloud Frontier.
-  2. **Latency-First:** Routes `Simple` / `Moderate` $\rightarrow$ Ultra-low-latency Cloud SLM (Groq); `Complex` $\rightarrow$ Frontier.
-  3. **Air-Gapped / Privacy:** Disallows any external outbound API calls; routes exclusively between Local SLMs and Local High-VRAM models.
-  4. **Quality-Preserving:** High threshold for SLM routing; routes to frontier models whenever confidence score falls below 0.85.
+#### Persona A: Alex — The AI Application Developer / Startup Founder
+- **Background:** Building an agentic workflow or customer-facing SaaS application with heavy prompt volume.
+- **Core Pain:** Monthly API bills are ballooning into thousands of dollars; rate limits on frontier providers cause downtime.
+- **Goal:** Slash inference bills immediately by offloading routine intermediate agent steps to cheap models without breaking code.
 
-#### Stage 3: Speculative Verification & Fallback Guardrail
-- **Detection Triggers:** Repetition loop detection, empty response, unparseable JSON when JSON schema was requested, or downstream provider timeout/5xx errors.
-- **Escalation Protocol:** Automatically and transparently retries the query against the designated frontier model, appending telemetry metadata indicating the escalation occurred.
+#### Persona B: Priya — The Enterprise Security & Compliance Lead
+- **Background:** Managing data governance for an internal corporate tool.
+- **Core Pain:** Sensitive internal queries cannot be dispatched to external cloud APIs under company compliance policies.
+- **Goal:** Enforce local-only execution (Ollama/vLLM) for confidential employee data, with explicit opt-in for external cloud escalation.
 
-### 3.3 Provider Integration Matrix
+#### Persona C: Jordan — The Indie Hacker / Local AI Enthusiast
+- **Background:** Running open-source models on consumer hardware (MacBook / RTX GPU) using Ollama.
+- **Core Pain:** Manually toggling between local models and OpenAI APIs when prompts get too complex.
+- **Goal:** A single endpoint that uses local hardware by default and automatically calls OpenAI only when the query demands high reasoning.
 
-| Provider | Integration Type | Default Models | Supported Capabilities |
+### 3.2 Jobs-to-be-Done (JTBD)
+> *"When my application processes high volumes of diverse user prompts, I want an intelligent gateway to evaluate prompt complexity automatically, so that I can minimize costs and latency while preserving full response quality."*
+
+---
+
+## 4. Goals & Non-Goals
+
+### 4.1 Goals (v1.0 In-Scope)
+- **Drop-in Wire Compatibility:** Support standard `/v1/chat/completions` (streaming SSE and non-streaming) using existing OpenAI SDKs (Python, TypeScript, cURL).
+- **Multi-Stage Tiered Router:**
+  - Stage 0: Deterministic heuristic fast-path (< 1.5ms).
+  - Stage 1: Semantic complexity classifier (~10–20ms) categorizing prompts into `Simple`, `Moderate`, or `Complex`.
+  - Stage 2: Policy-based dispatching across configured providers.
+  - Stage 3: Automatic fallback / escalation guardrail.
+- **Hybrid Provider Ecosystem:** Out-of-the-box support for:
+  - Local SLMs via Ollama / vLLM.
+  - Cloud SLMs via Groq / Together AI.
+  - Frontier APIs via OpenAI / Anthropic.
+- **Configurable Routing Profiles:** Allow users to choose between `Cost-Optimizer`, `Latency-First`, `Air-Gapped / Privacy`, and `Quality-First`.
+- **Telemetry & Live Dashboard:**
+  - Track prompt/completion tokens, latency, TTFT, and cumulative cost savings.
+  - Interactive web interface displaying live request streams and visual route breakdowns.
+
+### 4.2 Non-Goals (v1.0 Out-of-Scope)
+- **Model Fine-Tuning / Training:** SLM_Router is an inference gateway; model weights are not trained or updated by the gateway.
+- **Multi-Modal / Audio Routing:** v1.0 focuses exclusively on text chat completions. Audio/Vision routing is reserved for v2.0.
+- **Multi-Tenant Billing & Metering:** v1.0 is designed for single-team or developer self-hosted deployments, not as a commercial SaaS billing resale platform.
+
+---
+
+## 5. User Stories & Acceptance Criteria
+
+### Story 1: Drop-in Integration
+- **As an** application developer,  
+- **I want to** point my existing OpenAI client to `http://localhost:8000/v1`,  
+- **So that** I do not need to rewrite prompt templates, schemas, or function calling integrations.
+- **Acceptance Criteria:**
+  - GIVEN an application using `openai.OpenAI(base_url="http://localhost:8000/v1", api_key="sk-dummy")`
+  - WHEN it calls `client.chat.completions.create(model="auto", messages=[...])`
+  - THEN the gateway returns a standard OpenAI-formatted JSON or SSE stream response with HTTP 200.
+
+### Story 2: Complexity-Based Routing
+- **As an** engineer running high-frequency prompts,  
+- **I want** simple requests (e.g., "Extract email from text") routed to an SLM and complex tasks (e.g., "Debug this distributed race condition") routed to a frontier model,  
+- **So that** simple queries cost pennies and hard queries still receive high-tier reasoning.
+- **Acceptance Criteria:**
+  - GIVEN a simple extraction prompt
+  - WHEN evaluated by the gateway
+  - THEN it is classified as `Simple` and dispatched to an SLM (e.g., Llama 3.2 3B).
+  - GIVEN a complex multi-step reasoning prompt
+  - WHEN evaluated by the gateway
+  - THEN it is classified as `Complex` and dispatched to a frontier model (e.g., Claude 3.5 Sonnet / GPT-4o).
+
+### Story 3: Fail-Safe Guardrails & Automatic Escalation
+- **As an** application developer,  
+- **I want** the router to catch model failures or hallucinations automatically,  
+- **So that** low-quality SLM outputs never reach my end users.
+- **Acceptance Criteria:**
+  - GIVEN an SLM returns an empty string, unparseable JSON (when structured output was requested), or HTTP 500
+  - WHEN detected by the Stage 3 guardrail
+  - THEN the query is automatically re-executed against the designated frontier model and marked with `fallback_escalated: true` in telemetry.
+
+### Story 4: Live Telemetry & Savings Visibility
+- **As a** team lead,  
+- **I want** to see real-time metrics showing total dollar savings and routing distribution,  
+- **So that** I can prove ROI to leadership and fine-tune routing thresholds.
+- **Acceptance Criteria:**
+  - GIVEN queries processed by the router
+  - WHEN the developer opens the web dashboard
+  - THEN the UI displays: cumulative dollars saved vs. frontier baseline, average routing overhead (ms), and percentage of queries routed to SLMs vs. frontier models.
+
+---
+
+## 6. Functional Requirements (FR)
+
+| ID | Feature Name | Description | Priority |
 | :--- | :--- | :--- | :--- |
-| **Ollama** | Local REST API (`http://localhost:11434`) | `llama3.2:3b`, `qwen2.5:7b`, `phi3.5:latest` | Chat completions, streaming, offline execution |
-| **vLLM** | Local / Network OpenAI-compatible API | `Qwen/Qwen2.5-7B-Instruct`, `Qwen/Qwen2.5-32B-Instruct` | High-concurrency local batched inference |
-| **Groq** | Cloud API (Native / LiteLLM) | `llama-3.1-8b-instant`, `mixtral-8x7b-32768` | Sub-200ms TTFT, cloud SLM |
-| **OpenAI** | Cloud API | `gpt-4o`, `gpt-4o-mini` | Frontier reasoning, JSON mode |
-| **Anthropic** | Cloud API | `claude-3-5-sonnet-20241022`, `claude-3-5-haiku` | Advanced coding & multi-step analysis |
-
-### 3.4 Telemetry & Cost Accounting
-- Calculate exact token consumption (prompt tokens, completion tokens, total tokens) per request.
-- Calculate **Counterfactual Baseline Cost**: Estimate what the request would have cost if routed directly to GPT-4o or Claude 3.5 Sonnet.
-- Record **Net Savings ($)** and **Latency Delta (ms)** per transaction.
-- Stream telemetry to in-memory buffers or local SQLite database for dashboard consumption.
-
-### 3.5 Real-Time Analytics Dashboard (UI)
-- **Tech Stack:** React 19, Vite, TypeScript, Anime.js motion hooks, Lucide React icons, Vanilla CSS / Tailwind (Slate/Zinc neutral dark palette).
-- **Core Views:**
-  1. **Live Request Stream:** Real-time log of incoming queries showing prompt preview, detected complexity score, routing decision, and final model provider.
-  2. **Cost & Savings Telemetry:** Interactive counters displaying aggregate dollars saved, cost reduction percentage, and total tokens offloaded to SLMs.
-  3. **Latency Breakdown:** Comparative charts contrasting SLM TTFT against frontier model latency.
-  4. **Policy & Provider Configurator:** Interactive switches to toggle active routing profile (`Cost`, `Latency`, `Privacy`, `Quality`) and inspect local Ollama / cloud API connection status.
+| **FR-1** | **OpenAI API Compatibility** | Support `/v1/chat/completions` (JSON & SSE streaming), `/v1/models`. | **P0** |
+| **FR-2** | **Stage 0 Heuristic Scorer** | Regex filters, token length thresholds, and prompt cache lookup in < 1.5ms. | **P0** |
+| **FR-3** | **Stage 1 Complexity Classifier** | Fast embedding / cross-encoder model scoring prompt complexity (`0.0`–`1.0`) and domain intent in < 25ms. | **P0** |
+| **FR-4** | **Provider Adapters** | Universal adapter supporting Ollama, vLLM, Groq, OpenAI, and Anthropic. | **P0** |
+| **FR-5** | **Policy Profiles** | Configurable profiles: `Cost-Optimizer`, `Latency-First`, `Air-Gapped`, `Quality-First`. | **P0** |
+| **FR-6** | **Fallback & Escalation** | Auto-retry on frontier model when SLM times out, errors, or fails schema validation. | **P0** |
+| **FR-7** | **Cost & Latency Accounting** | Calculate actual cost vs. counterfactual baseline (GPT-4o) and log token counts. | **P1** |
+| **FR-8** | **Analytics Dashboard UI** | Web interface displaying real-time stream, cost metrics, and provider status. | **P1** |
+| **FR-9** | **Model Override Header** | Allow clients to force a specific model via `model="gpt-4o"` or custom header `X-Router-Model`. | **P1** |
+| **FR-10** | **Semantic Cache** | Cache exact/similar prompt responses to deliver sub-5ms cached responses. | **P2** |
 
 ---
 
-## 4. Data Contracts & Schema Specifications
+## 7. Developer & User Experience (DX / UX)
 
-### 4.1 Chat Completion Request Payload (Pydantic v2 Schema)
+### 7.1 Developer Setup Flow (Target: < 2 Minutes)
+1. Start the gateway:
+   ```bash
+   uvicorn gateway.main:app --port 8000
+   ```
+2. Update application configuration:
+   ```python
+   from openai import OpenAI
 
-```python
-from typing import List, Optional, Union, Dict, Any
-from pydantic import BaseModel, Field
+   client = OpenAI(
+       base_url="http://localhost:8000/v1",
+       api_key="router-local"
+   )
 
-class ChatMessage(BaseModel):
-    role: str = Field(..., description="Role of the message author (system, user, assistant, tool)")
-    content: str = Field(..., description="Contents of the message")
-    name: Optional[str] = None
+   response = client.chat.completions.create(
+       model="auto",  # Enables dynamic routing
+       messages=[{"role": "user", "content": "Extract company names from this memo..."}]
+   )
+   ```
 
-class ChatCompletionRequest(BaseModel):
-    model: Optional[str] = Field(default="auto", description="Requested model or 'auto' for intelligent routing")
-    messages: List[ChatMessage] = Field(..., description="Chronological conversation context")
-    temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0)
-    top_p: Optional[float] = Field(default=1.0, ge=0.0, le=1.0)
-    max_tokens: Optional[int] = Field(default=None, ge=1)
-    stream: Optional[bool] = Field(default=False, description="Enable SSE token streaming")
-    response_format: Optional[Dict[str, Any]] = None
-    tools: Optional[List[Dict[str, Any]]] = None
-```
-
-### 4.2 Routing Decision Metadata (Internal Contract)
-
-```python
-from enum import Enum
-from pydantic import BaseModel
-
-class ComplexityTier(str, Enum):
-    SIMPLE = "simple"
-    MODERATE = "moderate"
-    COMPLEX = "complex"
-
-class DomainIntent(str, Enum):
-    CODE = "code"
-    MATH = "math"
-    EXTRACTION = "extraction"
-    SUMMARIZATION = "summarization"
-    CREATIVE = "creative"
-    GENERAL = "general"
-
-class RoutingDecision(BaseModel):
-    complexity_score: float  # 0.0 to 1.0
-    tier: ComplexityTier
-    intent: DomainIntent
-    selected_provider: str   # 'ollama', 'groq', 'openai', 'anthropic'
-    selected_model: str      # e.g., 'llama-3.2-3b', 'claude-3-5-sonnet'
-    route_reason: str
-    stage_trigger: int       # 0 (heuristics), 1 (classifier), or 3 (fallback)
-    latency_ms: float
-```
-
-### 4.3 Telemetry Record Contract
-
-```python
-class TelemetryRecord(BaseModel):
-    request_id: str
-    timestamp: str
-    prompt_tokens: int
-    completion_tokens: int
-    actual_model: str
-    actual_provider: str
-    actual_cost_usd: float
-    counterfactual_model: str   # e.g., 'gpt-4o'
-    counterfactual_cost_usd: float
-    savings_usd: float
-    time_to_first_token_ms: float
-    total_latency_ms: float
-    fallback_escalated: bool
-```
+### 7.2 Dashboard User Interface Specifications
+- **Design Philosophy:** Dark-mode first using a subtle neutral scale (Zinc/Slate), strict typography scale (`tracking-tight` on headings), no gratuitous gradients or decorative clutter.
+- **Key Modules:**
+  1. **Header KPI Bar:** Cumulative Dollars Saved, Total Requests Routed, SLM Offload Rate (%), P95 Gateway Latency.
+  2. **Live Routing Visualizer:** Real-time stream of incoming queries displaying query snippet, detected complexity badge, routing path, and latency breakdown.
+  3. **Policy Switcher:** Instant toggles for active policy profile (`Cost`, `Latency`, `Privacy`, `Quality`).
+  4. **Provider Health Matrix:** Status indicators for local Ollama daemon and cloud API keys.
 
 ---
 
-## 5. Non-Functional Requirements
+## 8. Non-Functional Requirements (NFR)
 
-### 5.1 Performance & Latency Budgets
-- **Stage 0 Heuristic Evaluation:** $< 1.5\text{ ms}$.
-- **Stage 1 Semantic Classification:** $< 25\text{ ms}$ on standard multi-core CPU.
-- **Gateway Overhead:** Total internal proxy overhead must not exceed $30\text{ ms}$ (excluding downstream LLM inference time).
+### 8.1 Performance & Latency Budgets
+- **Stage 0 Overhead:** $\le 1.5\text{ ms}$
+- **Stage 1 Classification Overhead:** $\le 25\text{ ms}$ on standard multi-core CPU (no dedicated GPU required for routing).
+- **Total Gateway Overhead:** $\le 30\text{ ms}$ (exclusive of downstream model generation time).
 
-### 5.2 Scalability & Concurrency
-- Fully asynchronous I/O utilizing FastAPI, AsyncIO, and HTTPX connection pooling.
-- Support $\ge 100$ concurrent streaming connections on a standard single-node server.
+### 8.2 Reliability & Availability
+- **System Uptime:** 99.9% availability for gateway daemon.
+- **Failover Guarantee:** No client request dropped due to downstream SLM crash or timeout; transparent failover to frontier model.
 
-### 5.3 Reliability & Failure Handling
-- **Graceful Provider Fallback:** In the event of downstream API unavailability (e.g., local Ollama daemon down), automatically fallback to configured cloud endpoints without dropping client requests.
-- **Error Transparency:** Provide standard HTTP status codes (`400`, `401`, `429`, `502`, `504`) with OpenAI-compatible error payload shapes.
-
-### 5.4 Privacy & Security
-- **Data Minimization:** No raw query payloads persisted to permanent disk unless debug logging is explicitly enabled.
-- **Air-Gapped Mode:** In `Privacy` mode, all outbound network sockets to external LLM providers are strictly locked down.
+### 8.3 Security & Privacy
+- **Stateless by Default:** Zero persistence of prompt payloads to disk unless audit logging is explicitly toggled by user.
+- **Strict Local Isolation:** In `Air-Gapped / Privacy` mode, network sockets to external cloud APIs are strictly blocked at the transport layer.
 
 ---
 
-## 6. Implementation Milestones
+## 9. Success Metrics & Key Performance Indicators (KPIs)
+
+| Metric | Target | Measurement Method |
+| :--- | :--- | :--- |
+| **North Star: Cost Reduction %** | **$\ge 65\%$** | $\frac{\text{Baseline Cost} - \text{Actual Cost}}{\text{Baseline Cost}} \times 100$ |
+| **SLM Routing Accuracy** | **$\ge 90\%$** | Percentage of SLM routes that complete without triggering fallback escalation |
+| **Routing Overhead (P95)** | **$\le 25\text{ ms}$** | Time spent inside routing engine before downstream dispatch |
+| **Adoption Friction** | **1 line of code** | Number of code modifications required to integrate existing applications |
+| **Fallback Escalation Rate** | **$\le 5\%$** | Percentage of SLM executions that fail over to frontier models |
+
+---
+
+## 10. Release Milestones & Roadmap
 
 ```mermaid
-gantt
-    title SLM_Router Implementation Timeline
-    dateFormat  YYYY-MM-DD
-    section Phase 1: API Gateway
-    FastAPI Core & Pydantic Schemas :done, p1_1, 2026-10-14, 2d
-    LiteLLM / Provider Layer       :active, p1_2, after p1_1, 3d
-    Streaming SSE Implementation   :p1_3, after p1_2, 2d
-    section Phase 2: Routing Core
-    Stage 0 Heuristics Engine      :p2_1, after p1_3, 2d
-    Stage 1 Semantic Scorer (ONNX) :p2_2, after p2_1, 4d
-    Policy Dispatcher & Fallback   :p2_3, after p2_2, 3d
-    section Phase 3: Analytics UI
-    Vite + React + Anime.js Setup  :p3_1, after p2_3, 2d
-    Telemetry & Stream Visualizer  :p3_2, after p3_1, 4d
-    Provider & Policy Config View  :p3_3, after p3_2, 3d
-    section Phase 4: Verification
-    E2E Testing & Benchmarking     :p4_1, after p3_3, 4d
+timeline
+    title Product Release Roadmap
+    Milestone 1 (Sprint 1) : Core Gateway Scaffold : Pydantic Schemas : LiteLLM Provider Matrix : Streaming SSE Support
+    Milestone 2 (Sprint 2) : Stage 0 Heuristic Filter : Stage 1 Complexity Classifier : Policy Profiles & Fallback Guardrails
+    Milestone 3 (Sprint 3) : Telemetry & Accounting Engine : React & Anime.js Dashboard : Live Visualizer Stream
+    Milestone 4 (Sprint 4) : E2E Benchmarking : Dockerization : Documentation & OSS Release v1.0
 ```
 
 ---
 
-## 7. Success Criteria & KPIs
+## 11. Risks & Mitigation Strategies
 
-1. **Routing Accuracy:** $\ge 92\%$ of simple/extraction tasks correctly routed to SLMs without triggering escalation.
-2. **Cost Efficiency:** $\ge 65\%$ net reduction in token costs on mixed benchmark evaluation datasets.
-3. **Latency Profile:** $\le 25\text{ ms}$ median routing overhead per query.
-4. **Reliability:** $99.9\%$ successful response rate with automatic fallback handling.
+| Risk | Impact | Probability | Mitigation Strategy |
+| :--- | :--- | :--- | :--- |
+| **Misclassification (Under-routing)** | Complex query sent to small SLM, resulting in poor answer. | Medium | Provide conservative confidence thresholds; allow client explicit model override (`model="gpt-4o"`); enable Stage 3 guardrail. |
+| **Classification Latency Overhead** | Classifier adds too much delay, negating SLM latency benefit. | Low | Use optimized ONNX runtime / quantized micro-encoder running locally on CPU in under 20ms; bypass Stage 1 for cached or short regex queries. |
+| **Local Provider Downtime** | Ollama daemon crashes or machine runs out of VRAM. | Medium | Continuous health checks; auto-escalate to cloud SLM (Groq) or frontier API if local socket does not respond within 500ms. |
