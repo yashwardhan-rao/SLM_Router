@@ -26,6 +26,15 @@ cargo clippy --all-targets -- -D warnings && cargo test
 
 Runs offline, with no Ollama and no network.
 
+## Configuration
+
+Copy [`slm-router.example.toml`](slm-router.example.toml) to `slm-router.toml` and edit it. Every option is documented in the file. Secrets (`ROUTER_API_KEY` and the cloud key) come from environment variables, never from the file.
+
+```
+slm-router serve --warmup        # run the proxy
+slm-router stats --since 24h     # summarise the request log
+```
+
 ## Roadmap
 
 - [x] Repository setup and development guidelines
