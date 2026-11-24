@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: slm-router-linux-x86_64
+            bin: slm-router
+          - os: windows-latest
+            asset: slm-router-windows-x86_64.exe
+            bin: slm-router.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked
+      - name: Name the binary
+        shell: bash
+        run: cp target/release/${{ matrix.bin }} ${{ matrix.asset }}
+      - name: Attach to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # The two matrix jobs race to create the release; the loser falls through to upload.
+        run: |
+          gh release create "$GITHUB_REF_NAME" --generate-notes 2>/dev/null || true
+          gh release upload "$GITHUB_REF_NAME" "${{ matrix.asset }}" --clobber

@@ -7,6 +7,9 @@ Standard library only. Start the router first (`slm-router serve --warmup`), the
     python scripts/bench.py                 # auto routing: complex prompts may call the CLOUD (costs money)
     python scripts/bench.py --local-only    # forbid the cloud for every request
     python scripts/bench.py --skip-complex  # auto routing without the prompts that go to the cloud
+    python scripts/bench.py --ab --log slm-router.jsonl
+                                            # A/B: 5-turn session with one X-Session-Id vs unique ids;
+                                            # set [pricing] in the config to get saved_usd (README table)
 
 Afterwards run `slm-router stats` to see the routing split, latency and savings.
 """
@@ -15,6 +18,7 @@ import json
 import os
 import sys
 import time
+import uuid
 import urllib.error
 import urllib.request
 
@@ -105,6 +109,44 @@ def build_plan(skip_complex=False):
     return plan
 
 
+def ab_arm(base, key, arm, timeout):
+    """One 5-turn conversation, real replies fed back. Returns (session id prefix, follow-up cached, prompt)."""
+    nonce = uuid.uuid4().hex[:8]  # keeps the first turn from hitting the other arm's Ollama cache
+    hist, rows = [], []
+    for i, turn in enumerate(TURNS):
+        hist.append({"role": "user", "content": ("[%s] " % nonce if i == 0 else "") + turn})
+        sid = "ab-%s-%s" % (nonce, "fixed" if arm == "pinned" else "u%d" % i)
+        body = {"model": "slm-router/auto", "messages": list(hist), "max_tokens": 120}
+        req = urllib.request.Request(base + "/chat/completions", data=json.dumps(body).encode(),
+                                     headers={"content-type": "application/json", "x-session-id": sid})
+        if key:
+            req.add_header("authorization", "Bearer " + key)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            d = json.load(resp)
+        u = d["usage"]
+        rows.append((u["prompt_tokens"], (u.get("prompt_tokens_details") or {}).get("cached_tokens", 0)))
+        hist.append({"role": "assistant", "content": d["choices"][0]["message"]["content"]})
+    return "ab-%s-" % nonce, sum(c for _, c in rows[1:]), sum(p for p, _ in rows[1:])
+
+
+def saved_usd(log, prefix):
+    total, n = 0.0, 0
+    for line in open(log, encoding="utf-8"):
+        r = json.loads(line)
+        if str(r.get("session_id", "")).startswith(prefix):
+            n += 1
+            total += r.get("saved_usd") or 0.0
+    return total, n
+
+
+def run_ab(args):
+    print("A/B: 5 turns, same session id vs unique ids  (needs the local model; keep [pricing] set for saved_usd)")
+    for arm in ("pinned", "unique"):
+        prefix, cached, prompt = ab_arm(args.base, args.key, arm, args.timeout)
+        usd = "n/a (pass --log)" if not args.log else "$%.6f over %d logged requests" % saved_usd(args.log, prefix)
+        print("%-7s follow-up cache reuse %d of %d (%.0f%%)   saved_usd %s" % (arm, cached, prompt, 100 * cached / prompt, usd))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--base", default="http://127.0.0.1:8080/v1", help="router base URL (default: %(default)s)")
@@ -112,7 +154,11 @@ def main():
     ap.add_argument("--local-only", action="store_true", help="send X-Router-Policy: local-only so nothing reaches the cloud")
     ap.add_argument("--skip-complex", action="store_true", help="leave out the 5 reasoning prompts that auto routing sends to the cloud")
     ap.add_argument("--timeout", type=float, default=120, help="seconds per request (default: %(default)s)")
+    ap.add_argument("--ab", action="store_true", help="run the pinned vs unique-session A/B instead of the normal plan")
+    ap.add_argument("--log", help="the router's JSONL log, read by --ab to sum saved_usd")
     args = ap.parse_args()
+    if args.ab:
+        return run_ab(args)
 
     plan = build_plan(args.skip_complex)
     print("%d requests -> %s%s" % (len(plan), args.base, "  [local-only]" if args.local_only else ""))
