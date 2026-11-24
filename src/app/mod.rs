@@ -1,9 +1,10 @@
-//! The axum application: bearer auth, `/v1/models`, `/v1/chat/completions`.
+//! The axum application: bearer auth, `/v1/models`, `/v1/chat/completions`, `/v1/responses`.
 
 mod chat;
 mod dispatch;
 mod guard;
 mod policy;
+mod responses;
 mod sse;
 mod stream;
 mod telemetry;
@@ -50,6 +51,7 @@ pub fn router(cfg: Config) -> Router {
     Router::new()
         .route("/v1/models", get(models))
         .route("/v1/chat/completions", post(chat::chat))
+        .route("/v1/responses", post(responses::responses))
         .layer(DefaultBodyLimit::max(body_limit))
         .layer(from_fn_with_state(state.clone(), auth))
         .with_state(state)

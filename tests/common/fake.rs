@@ -1,7 +1,7 @@
 //! In-process fake OpenAI-compatible upstreams on ephemeral ports.
 use axum::{
     Json, Router, body::Body, extract::DefaultBodyLimit, extract::State, http::HeaderMap,
-    http::StatusCode, response::IntoResponse, routing::post,
+    http::StatusCode, http::Uri, response::IntoResponse, routing::post,
 };
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex, atomic::AtomicBool, atomic::Ordering};
@@ -12,6 +12,7 @@ use tokio_stream::wrappers::ReceiverStream;
 pub struct Seen {
     pub auth: Option<String>,
     pub body: Value,
+    pub path: String,
 }
 
 #[derive(Clone)]
@@ -73,6 +74,7 @@ fn event(payload: &str) -> String {
 
 async fn handle(
     State(s): State<Shared>,
+    uri: Uri,
     h: HeaderMap,
     Json(body): Json<Value>,
 ) -> impl IntoResponse {
@@ -80,7 +82,8 @@ async fn handle(
         .get("authorization")
         .and_then(|v| v.to_str().ok())
         .map(String::from);
-    s.seen.lock().unwrap().push(Seen { auth, body });
+    let path = uri.path().to_string();
+    s.seen.lock().unwrap().push(Seen { auth, body, path });
     match s.mode {
         Mode::Ok => {
             let usage = json!({"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15});
@@ -161,6 +164,7 @@ pub async fn fake(mode: Mode, tag: &'static str) -> Fake {
     };
     let app = Router::new()
         .route("/v1/chat/completions", post(handle))
+        .route("/v1/responses", post(handle))
         .layer(DefaultBodyLimit::disable())
         .with_state(shared);
     Fake {

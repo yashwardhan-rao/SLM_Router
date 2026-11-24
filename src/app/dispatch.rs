@@ -3,7 +3,7 @@
 use super::{
     AppState,
     guard::Guard,
-    policy::{effective_policy, route_error},
+    policy::{effective_policy, route_error, unsupported},
     stream,
     telemetry::{new_record, saved_usd, usage},
 };
@@ -77,6 +77,15 @@ pub async fn serve(s: Arc<AppState>, headers: &HeaderMap, job: Job) -> Result<Re
         (rec.target, rec.reason, rec.failed_over, rec.pinned) =
             (Target::Cloud, Reason::LocalUnavailable, true, false);
         result = call(&s, &mut body, api, Target::Cloud).await;
+    }
+    // Checked on the final reply only, so a missing route is never retried elsewhere,
+    // and before pinning, so a target that cannot serve the endpoint is not made sticky.
+    if let Ok(Opened::Full(reply)) = &result
+        && let Some(err) = unsupported(api, rec.target, reply)
+    {
+        (rec.status, rec.ttfb_ms, rec.outcome) = (501, reply.ttfb_ms, "upstream_error");
+        rec.log();
+        return Err(err);
     }
     if result.is_ok() && !matches!(decision.reason, Reason::Forced | Reason::Policy) {
         s.pins.set(&sid, rec.target);

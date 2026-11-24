@@ -38,6 +38,7 @@ pub enum Reason {
     LocalUnavailable,
     Forced,
     Policy,
+    Stateful,
     Pinned,
     Capability,
     Context,
@@ -57,6 +58,8 @@ pub enum RouteError {
     PolicyConflict,
     /// Prompt exceeds the local context and policy forbids cloud (HTTP 400).
     ContextExceeded,
+    /// Request depends on server-side state only the cloud keeps, but must go local (HTTP 400).
+    NeedsCloud,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -66,6 +69,8 @@ pub struct Features {
     pub needs_capabilities: bool,
     pub est_prompt_tokens: usize,
     pub last_user_text: String,
+    /// Stateful `/v1/responses` fields; the local model would silently drop them.
+    pub requires_cloud: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -98,6 +103,9 @@ fn dec(target: Target, reason: Reason) -> Decision {
 
 /// Rules 3-6: content-based routing, ignoring forcing, policy and pins.
 fn auto_route(f: &Features, cfg: &RoutingConfig) -> Decision {
+    if f.requires_cloud {
+        return dec(Target::Cloud, Reason::Stateful);
+    }
     if f.needs_capabilities && !cfg.local_supports_tools {
         return dec(Target::Cloud, Reason::Capability);
     }
@@ -138,6 +146,7 @@ pub fn decide(
     };
     let over_context = f.est_prompt_tokens > cfg.local_max_context_tokens;
     match forced {
+        Some((Target::Local, _)) if f.requires_cloud => Err(RouteError::NeedsCloud),
         Some((Target::Local, _)) if over_context => Err(RouteError::ContextExceeded),
         Some((target, reason)) => Ok(dec(target, reason)),
         None => Ok(apply_pin(pin, auto_route(f, cfg))),

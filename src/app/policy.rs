@@ -1,10 +1,32 @@
-//! Request-level policy and routing-error mapping.
+//! Request-level policy and routing / upstream error mapping.
 
 use crate::{
     errors::ApiError,
-    routing::{Policy, RouteError},
+    routing::{Policy, RouteError, Target},
+    upstream::{Api, Reply},
 };
-use axum::http::HeaderValue;
+use axum::http::{HeaderValue, StatusCode};
+use serde_json::Value;
+
+/// A 404/405 without an OpenAI error body means the upstream lacks `/v1/responses`. One *with*
+/// an error body (e.g. an unknown `previous_response_id`) is a real answer and is relayed as is.
+pub fn unsupported(api: Api, target: Target, r: &Reply) -> Option<ApiError> {
+    let error_body =
+        serde_json::from_slice::<Value>(&r.body).is_ok_and(|v| v.get("error").is_some());
+    if api != Api::Responses || !matches!(r.status, 404 | 405) || error_body {
+        return None;
+    }
+    let name = if target == Target::Local {
+        "local"
+    } else {
+        "cloud"
+    };
+    let msg = format!("{name} upstream does not implement /v1/responses");
+    Some(
+        ApiError::new(StatusCode::NOT_IMPLEMENTED, "invalid_request_error", msg)
+            .code("responses_unsupported"),
+    )
+}
 
 /// The header can only tighten the configured default, never loosen it.
 pub fn effective_policy(cfg: Policy, header: Option<&HeaderValue>) -> Result<Policy, ApiError> {
@@ -32,5 +54,9 @@ pub fn route_error(e: RouteError) -> ApiError {
             ApiError::bad_request("prompt exceeds the local model's context")
                 .code("context_length_exceeded")
         }
+        RouteError::NeedsCloud => ApiError::bad_request(
+            "previous_response_id, conversation, store and background need the cloud upstream",
+        )
+        .code("stateful_requires_cloud"),
     }
 }
