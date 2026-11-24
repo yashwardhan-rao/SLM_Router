@@ -87,7 +87,7 @@ impl Default for RoutingConfig {
     fn default() -> Self {
         Self {
             local_supports_tools: false,
-            local_max_context_tokens: 8000,
+            local_max_context_tokens: 4096,
             complex_prompt_tokens: 1500,
             cue_min_chars: 200,
             reasoning_cues: ["prove", "step by step", "refactor", "analyze", "derive"]
@@ -95,6 +95,13 @@ impl Default for RoutingConfig {
                 .to_vec(),
         }
     }
+}
+
+/// Tokens kept free in the local context for the reply.
+const REPLY_RESERVE: usize = 512;
+
+fn over_context(f: &Features, cfg: &RoutingConfig) -> bool {
+    f.est_prompt_tokens > cfg.local_max_context_tokens.saturating_sub(REPLY_RESERVE)
 }
 
 fn dec(target: Target, reason: Reason) -> Decision {
@@ -109,7 +116,7 @@ fn auto_route(f: &Features, cfg: &RoutingConfig) -> Decision {
     if f.needs_capabilities && !cfg.local_supports_tools {
         return dec(Target::Cloud, Reason::Capability);
     }
-    if f.est_prompt_tokens > cfg.local_max_context_tokens {
+    if over_context(f, cfg) {
         return dec(Target::Cloud, Reason::Context);
     }
     if f.est_prompt_tokens > cfg.complex_prompt_tokens || has_reasoning_cue(f, cfg) {
@@ -144,10 +151,9 @@ pub fn decide(
         (Forced::Auto, Policy::LocalOnly) => Some((Target::Local, Reason::Policy)),
         (Forced::Auto, Policy::Auto) => None,
     };
-    let over_context = f.est_prompt_tokens > cfg.local_max_context_tokens;
     match forced {
         Some((Target::Local, _)) if f.requires_cloud => Err(RouteError::NeedsCloud),
-        Some((Target::Local, _)) if over_context => Err(RouteError::ContextExceeded),
+        Some((Target::Local, _)) if over_context(f, cfg) => Err(RouteError::ContextExceeded),
         Some((target, reason)) => Ok(dec(target, reason)),
         None => Ok(apply_pin(pin, auto_route(f, cfg))),
     }

@@ -114,3 +114,36 @@ fn rule1_forced_local_with_oversized_prompt_is_an_error_under_any_policy() {
         Err(RouteError::ContextExceeded)
     );
 }
+
+#[test]
+fn rule1_forced_local_keeps_512_tokens_free_for_the_reply() {
+    let at = |est| Features {
+        forced: Forced::Local,
+        est_prompt_tokens: est,
+        ..Default::default()
+    };
+    assert_eq!(
+        route(&at(3584), Policy::Auto, None),
+        ok(Target::Local, Reason::Forced)
+    );
+    assert_eq!(
+        route(&at(3585), Policy::Auto, None),
+        Err(RouteError::ContextExceeded)
+    );
+}
+
+#[test]
+fn tiny_context_config_does_not_underflow() {
+    let cfg = RoutingConfig {
+        local_max_context_tokens: 100,
+        ..Default::default()
+    };
+    let f = Features {
+        est_prompt_tokens: 1,
+        ..Default::default()
+    };
+    assert_eq!(
+        decide(&f, &cfg, Policy::Auto, None),
+        ok(Target::Cloud, Reason::Context)
+    );
+}

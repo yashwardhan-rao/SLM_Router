@@ -20,6 +20,7 @@ fn minimal_config_gets_spec_defaults() {
     assert_eq!(c.session.ttl_secs, 300);
     assert_eq!(c.session.max_pins, 10_000);
     assert_eq!(c.routing.complex_prompt_tokens, 1500);
+    assert_eq!(c.routing.local_max_context_tokens, 4096);
     assert!(c.pricing.is_none());
     assert!(c.validate().is_ok());
 }

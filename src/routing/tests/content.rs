@@ -29,9 +29,9 @@ fn rule3_local_supporting_tools_keeps_capability_requests_local() {
 }
 
 #[test]
-fn rule4_prompt_over_local_context_routes_to_cloud() {
+fn rule4_prompt_over_local_context_minus_reply_reserve_routes_to_cloud() {
     let f = Features {
-        est_prompt_tokens: 8001,
+        est_prompt_tokens: 3585,
         ..Default::default()
     };
     assert_eq!(
@@ -41,9 +41,9 @@ fn rule4_prompt_over_local_context_routes_to_cloud() {
 }
 
 #[test]
-fn rule4_prompt_exactly_at_local_context_stays_local() {
+fn rule4_prompt_exactly_at_local_context_minus_reply_reserve_stays_local() {
     let f = Features {
-        est_prompt_tokens: 8000,
+        est_prompt_tokens: 3584,
         ..Default::default()
     };
     let cfg = RoutingConfig {
