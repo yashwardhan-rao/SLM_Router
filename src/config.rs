@@ -50,10 +50,24 @@ pub struct LocalCfg {
     pub model: String,
     #[serde(default = "default_first_byte_ms")]
     pub first_byte_timeout_ms: u64,
+    /// Consecutive failures (unreachable or 5xx) that open the circuit; 0 disables it.
+    #[serde(default = "default_breaker_failures")]
+    pub breaker_failures: u32,
+    /// How long an open circuit skips local before letting one probe through.
+    #[serde(default = "default_breaker_cooldown_ms")]
+    pub breaker_cooldown_ms: u64,
 }
 
 fn default_first_byte_ms() -> u64 {
     15_000
+}
+
+fn default_breaker_failures() -> u32 {
+    2
+}
+
+fn default_breaker_cooldown_ms() -> u64 {
+    30_000
 }
 
 #[derive(Debug, Clone, Deserialize)]

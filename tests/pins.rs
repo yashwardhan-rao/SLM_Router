@@ -41,17 +41,13 @@ async fn without_a_header_the_session_is_fingerprinted_from_system_and_first_use
 }
 
 #[tokio::test]
-async fn failover_moves_the_pin_to_cloud() {
+async fn failover_does_not_pin_the_session_to_cloud() {
     let r = rig(Mode::Status(503, "{}"), Mode::Ok, |_| {}).await;
     let h = [("x-session-id", "s1")];
     post_chat(&r.base, &user("hi"), &h).await;
     post_chat(&r.base, &user("again"), &h).await;
-    assert_eq!(
-        r.local.count(),
-        1,
-        "second request must skip the failing local model"
-    );
-    assert_eq!(r.cloud.count(), 2);
+    assert_eq!(r.local.count(), 2, "second request must try local again");
+    assert_ne!(log_lines(&r.dir.log())[1]["reason"], "pinned");
 }
 
 #[tokio::test]

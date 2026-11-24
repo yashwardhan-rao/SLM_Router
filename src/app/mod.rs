@@ -7,9 +7,12 @@ mod policy;
 mod responses;
 mod sse;
 mod stream;
+mod target;
 mod telemetry;
 
-use crate::{config::Config, errors::ApiError, logging::Logger, session::PinStore};
+use crate::{
+    circuit::Breaker, config::Config, errors::ApiError, logging::Logger, session::PinStore,
+};
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, Request, State},
@@ -29,6 +32,7 @@ pub struct AppState {
     pub pins: PinStore,
     pub logger: Logger,
     pub seq: AtomicU64,
+    pub breaker: Breaker,
 }
 
 pub fn router(cfg: Config) -> Router {
@@ -45,6 +49,10 @@ pub fn router(cfg: Config) -> Router {
         ),
         logger: Logger::new(&cfg.log.path),
         seq: AtomicU64::new(0),
+        breaker: Breaker::new(
+            cfg.local.breaker_failures,
+            Duration::from_millis(cfg.local.breaker_cooldown_ms),
+        ),
         http,
         cfg,
     });

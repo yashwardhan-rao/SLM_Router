@@ -5,13 +5,14 @@ use super::{
     guard::Guard,
     policy::{effective_policy, route_error, unsupported},
     stream,
+    target::{attempt, call, local_failed},
     telemetry::{new_record, saved_usd, usage},
 };
 use crate::{
     errors::ApiError,
     routing::{Features, Policy, Reason, Target, decide},
     session::SessionSource,
-    upstream::{Api, Opened, Reply, Unreachable, open_stream, post_json},
+    upstream::{Api, Opened, Reply},
 };
 use axum::{
     http::{HeaderMap, StatusCode, header::CONTENT_TYPE},
@@ -20,7 +21,7 @@ use axum::{
 use serde_json::Value;
 use std::{
     sync::{Arc, atomic::Ordering},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 /// A validated request, ready to route. `body` is forwarded as is, apart from `model`.
@@ -60,7 +61,7 @@ pub async fn serve(s: Arc<AppState>, headers: &HeaderMap, job: Job) -> Result<Re
     rec.pinned = decision.reason == Reason::Pinned;
     rec.stream = body["stream"] == true;
 
-    let mut result = call(&s, &mut body, api, decision.target).await;
+    let (mut result, skipped) = attempt(&s, &mut body, api, decision.target).await;
     if decision.target == Target::Local && local_failed(&result) {
         // Failover only for auto-routed requests; forced-local and local-only must not leak to cloud.
         // No byte has reached the client yet, so switching targets is still invisible to it.
@@ -74,8 +75,12 @@ pub async fn serve(s: Arc<AppState>, headers: &HeaderMap, job: Job) -> Result<Re
             )
             .code("local_unavailable"));
         }
+        let reason = match skipped {
+            true => Reason::CircuitOpen,
+            false => Reason::LocalUnavailable,
+        };
         (rec.target, rec.reason, rec.failed_over, rec.pinned) =
-            (Target::Cloud, Reason::LocalUnavailable, true, false);
+            (Target::Cloud, reason, true, false);
         result = call(&s, &mut body, api, Target::Cloud).await;
     }
     // Checked on the final reply only, so a missing route is never retried elsewhere,
@@ -87,7 +92,12 @@ pub async fn serve(s: Arc<AppState>, headers: &HeaderMap, job: Job) -> Result<Re
         rec.log();
         return Err(err);
     }
-    if result.is_ok() && !matches!(decision.reason, Reason::Forced | Reason::Policy) {
+    // Failovers do not pin: local is retried (or skipped by the breaker) on the next turn.
+    let pin = !matches!(
+        rec.reason,
+        Reason::Forced | Reason::Policy | Reason::LocalUnavailable | Reason::CircuitOpen
+    );
+    if result.is_ok() && pin {
         s.pins.set(&sid, rec.target);
     }
     match result {
@@ -127,41 +137,5 @@ pub async fn serve(s: Arc<AppState>, headers: &HeaderMap, job: Job) -> Result<Re
                 format!("upstream unreachable: {}", e.0),
             ))
         }
-    }
-}
-
-fn local_failed(r: &Result<Opened, Unreachable>) -> bool {
-    match r {
-        Ok(Opened::Full(reply)) => reply.status >= 500,
-        Ok(Opened::Stream(_)) => false,
-        Err(_) => true,
-    }
-}
-
-async fn call(
-    s: &AppState,
-    body: &mut Value,
-    api: Api,
-    target: Target,
-) -> Result<Opened, Unreachable> {
-    let (base, key, timeout, model) = match target {
-        Target::Local => {
-            let wait = Duration::from_millis(s.cfg.local.first_byte_timeout_ms);
-            (&s.cfg.local.base_url, None, Some(wait), &s.cfg.local.model)
-        }
-        Target::Cloud => (
-            &s.cfg.cloud.base_url,
-            s.cfg.cloud.api_key.as_deref(),
-            None,
-            &s.cfg.cloud.model,
-        ),
-    };
-    body["model"] = Value::from(model.as_str());
-    if body["stream"] == true {
-        open_stream(&s.http, base, api, key, body, timeout).await
-    } else {
-        post_json(&s.http, base, api, key, body, timeout)
-            .await
-            .map(Opened::Full)
     }
 }

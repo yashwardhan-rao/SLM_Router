@@ -39,6 +39,7 @@ pub enum Forced {
 #[serde(rename_all = "snake_case")]
 pub enum Reason {
     LocalUnavailable,
+    CircuitOpen,
     Forced,
     Policy,
     Stateful,
