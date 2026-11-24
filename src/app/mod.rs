@@ -19,6 +19,7 @@ use axum::{
 use serde_json::{Value, json};
 use std::sync::{Arc, atomic::AtomicU64};
 use std::time::Duration;
+use subtle::ConstantTimeEq;
 
 pub struct AppState {
     pub cfg: Config,
@@ -59,8 +60,9 @@ async fn auth(State(s): State<Arc<AppState>>, req: Request, next: Next) -> Respo
             .headers()
             .get(AUTHORIZATION)
             .and_then(|v| v.to_str().ok());
-        // shortcut: plain string compare, not constant-time; fine for a loopback-first proxy.
-        if sent.and_then(|v| v.strip_prefix("Bearer ")) != Some(key.as_str()) {
+        let token = sent.and_then(|v| v.strip_prefix("Bearer "));
+        // `ct_eq` is constant-time in the bytes; only a length mismatch returns early.
+        if !token.is_some_and(|t| bool::from(t.as_bytes().ct_eq(key.as_bytes()))) {
             return ApiError::unauthorized().into_response();
         }
     }

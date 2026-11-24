@@ -98,6 +98,11 @@ async fn router_bearer_token_is_enforced_when_configured() {
     assert_eq!(reqwest::get(&models).await.unwrap().status(), 401);
     let (s, _) = post_chat(&r.base, &user("hi"), &[("authorization", "Bearer wrong")]).await;
     assert_eq!(s, 401);
+    // Same length, prefix of the key, and key with a suffix must all be rejected.
+    for bad in ["Bearer j", "Bearer ", "Bearer kk", "k"] {
+        let (s, _) = post_chat(&r.base, &user("hi"), &[("authorization", bad)]).await;
+        assert_eq!(s, 401, "{bad}");
+    }
     let (s, _) = post_chat(&r.base, &user("hi"), &[("authorization", "Bearer k")]).await;
     assert_eq!(s, 200);
 }
