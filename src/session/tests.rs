@@ -43,3 +43,29 @@ async fn least_recently_used_pin_is_evicted_when_full() {
     assert_eq!(p.get("b"), Some(Target::Local));
     assert_eq!(p.get("c"), Some(Target::Local));
 }
+
+#[tokio::test(start_paused = true)]
+async fn eviction_order_is_insertion_order_even_within_one_instant() {
+    let p = PinStore::new(TTL, 2);
+    for id in ["a", "b", "c"] {
+        p.set(id, Target::Local);
+    }
+    assert_eq!(p.get("a"), None);
+    assert_eq!(p.get("b"), Some(Target::Local));
+}
+
+#[tokio::test(start_paused = true)]
+async fn refreshed_pin_survives_eviction_and_store_stays_bounded() {
+    let p = PinStore::new(TTL, 2);
+    p.set("a", Target::Local);
+    p.set("b", Target::Local);
+    p.set("a", Target::Local);
+    p.set("c", Target::Local);
+    assert_eq!(p.get("b"), None);
+    assert_eq!(p.get("a"), Some(Target::Local));
+    for i in 0..1000 {
+        p.set("a", Target::Local);
+        p.set(&format!("x{i}"), Target::Local);
+    }
+    assert!(p.len() <= 2);
+}

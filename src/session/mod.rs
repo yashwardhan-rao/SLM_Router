@@ -2,8 +2,8 @@
 
 use crate::routing::Target;
 use crate::schema::{ChatRequest, text_of};
-use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -41,10 +41,18 @@ pub fn session_id(header: Option<&str>, req: &ChatRequest) -> (String, SessionSo
     )
 }
 
+/// Pin map plus a recency queue; refreshed ids are re-queued and their old queue entries go stale.
+#[derive(Default)]
+struct Pins {
+    map: HashMap<String, (Target, Instant, u64)>,
+    order: VecDeque<(String, u64)>,
+    seq: u64,
+}
+
 pub struct PinStore {
     ttl: Duration,
     max: usize,
-    pins: Mutex<HashMap<String, (Target, Instant)>>,
+    pins: Mutex<Pins>,
 }
 
 impl PinStore {
@@ -52,16 +60,21 @@ impl PinStore {
         Self {
             ttl,
             max,
-            pins: Mutex::new(HashMap::new()),
+            pins: Mutex::default(),
         }
     }
 
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.pins.lock().unwrap().map.len()
+    }
+
     pub fn get(&self, id: &str) -> Option<Target> {
-        let mut pins = self.pins.lock().unwrap_or_else(|e| e.into_inner());
-        match pins.get(id) {
-            Some((t, at)) if at.elapsed() < self.ttl => Some(*t),
+        let mut p = self.pins.lock().unwrap_or_else(|e| e.into_inner());
+        match p.map.get(id) {
+            Some((t, at, _)) if at.elapsed() < self.ttl => Some(*t),
             Some(_) => {
-                pins.remove(id);
+                p.map.remove(id);
                 None
             }
             None => None,
@@ -69,28 +82,38 @@ impl PinStore {
     }
 
     /// Record a request on `id`: refreshes the TTL, allows local -> cloud, never cloud -> local.
+    /// Eviction and refresh are amortised O(1).
     pub fn set(&self, id: &str, target: Target) {
-        let mut pins = self.pins.lock().unwrap_or_else(|e| e.into_inner());
-        let now = Instant::now();
-        if let Some((cur, at)) = pins.get_mut(id)
-            && at.elapsed() < self.ttl
-        {
-            if target == Target::Cloud {
-                *cur = Target::Cloud;
+        let mut guard = self.pins.lock().unwrap_or_else(|e| e.into_inner());
+        let p = &mut *guard;
+        p.seq += 1;
+        let (now, seq) = (Instant::now(), p.seq);
+        match p.map.get_mut(id) {
+            Some((cur, at, s)) if at.elapsed() < self.ttl => {
+                if target == Target::Cloud {
+                    *cur = Target::Cloud;
+                }
+                (*at, *s) = (now, seq);
             }
-            *at = now;
-            return;
-        }
-        if pins.len() >= self.max && !pins.contains_key(id) {
-            // shortcut: O(n) scan for the LRU entry; fine at 10k pins, use a linked map beyond that.
-            let oldest = pins
-                .iter()
-                .min_by_key(|(_, (_, at))| *at)
-                .map(|(k, _)| k.clone());
-            if let Some(k) = oldest {
-                pins.remove(&k);
+            existing => {
+                let known = existing.is_some();
+                if p.map.len() >= self.max && !known {
+                    // Skip queue entries made stale by a refresh or an expiry.
+                    while let Some((k, s)) = p.order.pop_front() {
+                        if p.map.get(&k).is_some_and(|e| e.2 == s) {
+                            p.map.remove(&k);
+                            break;
+                        }
+                    }
+                }
+                p.map.insert(id.to_string(), (target, now, seq));
             }
         }
-        pins.insert(id.to_string(), (target, now));
+        p.order.push_back((id.to_string(), seq));
+        if p.order.len() > 2 * self.max + 16 {
+            let map = &p.map;
+            p.order
+                .retain(|(k, s)| map.get(k).is_some_and(|e| e.2 == *s));
+        }
     }
 }
