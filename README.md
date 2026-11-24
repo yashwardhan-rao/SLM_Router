@@ -6,7 +6,7 @@ The v1 scope is defined in [SPEC.md](SPEC.md). Development rules are in [CLAUDE.
 
 ## v1 at a glance
 
-- Drop-in `/v1/chat/completions` (streaming and non-streaming) plus `/v1/models`. Point any OpenAI SDK at it.
+- Drop-in `/v1/chat/completions` and `/v1/responses` (both streaming and non-streaming) plus `/v1/models`. Point any OpenAI SDK at it.
 - Two targets, both OpenAI-compatible, so no provider translation: one local Ollama model, one cloud model.
 - A pure, ordered-rule `decide()` function picks the target from cheap heuristics and a privacy policy (`auto`, `local-only`, `cloud-only`).
 - Sessions are pinned to a target so the local prompt/KV cache stays warm. A pin only ever escalates local to cloud.
@@ -34,6 +34,15 @@ Copy [`slm-router.example.toml`](slm-router.example.toml) to `slm-router.toml` a
 slm-router serve --warmup        # run the proxy
 slm-router stats --since 24h     # summarise the request log
 ```
+
+### `/v1/responses` notes
+
+- The body is forwarded as received. Only `model` is rewritten to the chosen target's model. Routing, pinning, failover and logging work the same as for chat. Token usage comes from `usage.input_tokens` / `output_tokens`, or from the `response.completed` event when streaming.
+- **Stateful requests always go to cloud.** A request is stateful if it has a non-empty `previous_response_id`, a `conversation`, `store: true`, `background: true` or an `item_reference` input item. Ollama silently ignores these fields, so the router never sends such a request to local. Forced local (`slm-router/local`) or the `local-only` policy returns 400 `stateful_requires_cloud`. A `null` or `false` value is not stateful.
+- **Stateful chains must start on cloud.** Response ids issued by Ollama mean nothing to the cloud. If the first turn was served locally and a later turn sends its `previous_response_id`, the cloud's own error (usually a 404) is relayed back unchanged. Once a session reaches the cloud, its pin keeps it there.
+- If an upstream does not implement `/v1/responses` (a 404 or 405 without an OpenAI error body), the request fails with 501 `responses_unsupported`. This error never triggers failover.
+- If the stream breaks mid-way, the client gets an `event: error` frame with code `stream_interrupted`.
+- `GET` and `DELETE /v1/responses/{id}` are not proxied.
 
 ## v1 Local Benchmark
 
@@ -74,4 +83,5 @@ Read it with care: it is one run on one machine with a 1B model. The cache figur
 - [x] Session pinning and policy
 - [x] Upstream clients, streaming, failover
 - [x] JSONL logging and `stats` CLI
+- [x] v0.2.0: `/v1/responses` passthrough (streaming, stateful-to-cloud routing)
 - [ ] Post-v1: ONNX classifier, semantic cache, speculative verification, extra tiers
