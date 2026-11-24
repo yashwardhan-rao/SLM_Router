@@ -149,11 +149,11 @@ pub fn features(r: &ChatRequest) -> Features {
         "slm-router/cloud" => Forced::Cloud,
         _ => Forced::Auto,
     };
-    // Rough estimate (chars / 4): good enough for threshold routing, no tokenizer dependency.
-    let chars: usize = r
+    // +4 per message approximates the chat template's role and separator tokens.
+    let est: usize = r
         .messages
         .iter()
-        .map(|m| text_of(&m.content).chars().count())
+        .map(|m| crate::tokens::estimate(&text_of(&m.content)) + 4)
         .sum();
     let last_user_text = r
         .messages
@@ -164,7 +164,7 @@ pub fn features(r: &ChatRequest) -> Features {
     Features {
         forced,
         needs_capabilities: needs_capabilities(r),
-        est_prompt_tokens: chars / 4,
+        est_prompt_tokens: est,
         last_user_text: last_user_text.unwrap_or_default(),
         // Chat has no server-side state; `/v1/responses` sets this from `stateful`.
         requires_cloud: false,

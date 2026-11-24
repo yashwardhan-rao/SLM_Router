@@ -3,6 +3,7 @@ use serde_json::{Value, json};
 use slm_router::{
     schema::{features, responses_view, stateful, text_of},
     session::session_id,
+    tokens::estimate,
 };
 
 fn req(extra: Value) -> Value {
@@ -68,20 +69,30 @@ fn each_stateful_trigger_is_stateful() {
 #[test]
 fn mixed_items_count_every_text_and_skip_reasoning() {
     let v = req(json!({
-        "instructions": "be brief",                                                  // 8
+        "instructions": "be brief",
         "input": [
-            {"role": "developer", "content": "dev rules"},                           // 9
+            {"role": "developer", "content": "dev rules"},
             {"type": "message", "role": "user",
-             "content": [{"type": "input_text", "text": "first question"}]},         // 14
-            {"role": "assistant", "content": [{"type": "output_text", "text": "ok"}]}, // 2
-            {"type": "function_call", "call_id": "c", "name": "f", "arguments": "{\"a\":1}"}, // 7
-            {"type": "function_call_output", "call_id": "c", "output": "result"},   // 6
+             "content": [{"type": "input_text", "text": "first question"}]},
+            {"role": "assistant", "content": [{"type": "output_text", "text": "ok"}]},
+            {"type": "function_call", "call_id": "c", "name": "f", "arguments": "{\"a\":1}"},
+            {"type": "function_call_output", "call_id": "c", "output": "result"},
             {"type": "reasoning", "summary": [{"type": "summary_text", "text": "LONG HIDDEN THOUGHT"}]},
-            {"role": "user", "content": "last one"},                                // 8
+            {"role": "user", "content": "last one"},
         ],
     }));
     let f = features(&responses_view(&v).unwrap());
-    assert_eq!(f.est_prompt_tokens, (8 + 9 + 14 + 2 + 7 + 6 + 8) / 4);
+    let texts = [
+        "be brief",
+        "dev rules",
+        "first question",
+        "ok",
+        "{\"a\":1}",
+        "result",
+        "last one",
+    ];
+    let want: usize = texts.iter().map(|t| estimate(t) + 4).sum();
+    assert_eq!(f.est_prompt_tokens, want);
     assert_eq!(f.last_user_text, "last one");
     assert!(!f.needs_capabilities);
 }

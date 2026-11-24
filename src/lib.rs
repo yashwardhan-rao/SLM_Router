@@ -7,4 +7,5 @@ pub mod routing;
 pub mod schema;
 pub mod session;
 pub mod stats;
+pub mod tokens;
 pub mod upstream;
