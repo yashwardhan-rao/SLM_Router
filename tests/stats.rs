@@ -28,10 +28,15 @@ fn run_stats(log_lines: Option<&[String]>, extra: &[&str]) -> Output {
 
 /// `prefix` is TOML placed before the required sections, e.g. a `[server]` table.
 fn run_stats_with(prefix: &str, log_lines: Option<&[String]>, extra: &[&str]) -> Output {
+    let raw = log_lines.map(|l| (l.join("\n") + "\n").into_bytes());
+    run_stats_raw(prefix, raw, extra)
+}
+
+fn run_stats_raw(prefix: &str, raw: Option<Vec<u8>>, extra: &[&str]) -> Output {
     let dir = TempDir::new();
     let log = dir.log();
-    if let Some(lines) = log_lines {
-        std::fs::write(&log, lines.join("\n") + "\n").unwrap();
+    if let Some(bytes) = raw {
+        std::fs::write(&log, bytes).unwrap();
     }
     let cfg = dir.0.join("c.toml");
     let toml = format!(
@@ -137,4 +142,15 @@ fn a_huge_since_value_is_a_clean_error_not_a_panic() {
         !out.status.success() && err.contains("--since") && !err.contains("panicked"),
         "{err}"
     );
+}
+
+#[test]
+fn invalid_utf8_line_is_skipped_not_fatal() {
+    let mut raw = sample().join("\n").into_bytes();
+    raw.extend_from_slice(b"\n\xff\xfe not utf8\n");
+    let o = run_stats_raw("", Some(raw), &[]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let out = stdout(&o);
+    assert!(out.contains("requests: 7"), "{out}");
+    assert!(out.contains("skipped unreadable log lines: 1"), "{out}");
 }

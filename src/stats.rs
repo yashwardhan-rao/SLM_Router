@@ -1,6 +1,7 @@
 //! `slm-router stats`: summarise the JSONL request log.
 
 use serde::Deserialize;
+use std::io::BufRead;
 use std::time::Duration;
 
 /// The log fields stats reads; extra fields in a line are ignored.
@@ -53,15 +54,25 @@ fn latency(recs: &[&Rec], target: &str) -> String {
     }
 }
 
-pub fn report(log: &str, now_ms: u64, since: Option<Duration>) -> String {
-    let parsed: Vec<Option<Rec>> = log
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str(l).ok())
-        .collect();
-    let skipped = parsed.iter().filter(|r| r.is_none()).count();
+/// Streams the log one line at a time; only the records inside the window are kept in memory.
+pub fn report(log: impl BufRead, now_ms: u64, since: Option<Duration>) -> String {
     let cutoff = since.map_or(0, |d| now_ms.saturating_sub(d.as_millis() as u64));
-    let recs: Vec<&Rec> = parsed.iter().flatten().filter(|r| r.ts >= cutoff).collect();
+    let (mut skipped, mut all) = (0, Vec::new());
+    for line in log.split(b'\n') {
+        let Ok(line) = line else {
+            skipped += 1; // a read error ends the stream; report what was read
+            break;
+        };
+        if line.trim_ascii().is_empty() {
+            continue;
+        }
+        match serde_json::from_slice::<Rec>(&line) {
+            Ok(r) if r.ts >= cutoff => all.push(r),
+            Ok(_) => {}
+            Err(_) => skipped += 1,
+        }
+    }
+    let recs: Vec<&Rec> = all.iter().collect();
 
     let local = recs.iter().filter(|r| r.target == "local").count();
     let cloud = recs.len() - local;

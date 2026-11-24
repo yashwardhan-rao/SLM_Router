@@ -45,8 +45,11 @@ async fn run(cli: Cli) -> Result<(), String> {
             let text = std::fs::read_to_string(&config)
                 .map_err(|e| format!("cannot read {config}: {e}"))?;
             let cfg = Config::from_toml(&text)?;
-            match std::fs::read_to_string(&cfg.log.path) {
-                Ok(log) => println!("{}", stats::report(&log, logging::now_ms(), since)),
+            match std::fs::File::open(&cfg.log.path) {
+                Ok(f) => {
+                    let log = std::io::BufReader::new(f);
+                    println!("{}", stats::report(log, logging::now_ms(), since))
+                }
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                     println!("no requests logged yet")
                 }
