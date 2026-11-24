@@ -10,7 +10,7 @@ The v1 scope is defined in [SPEC.md](SPEC.md). Development rules are in [CLAUDE.
 - Two targets, both OpenAI-compatible, so no provider translation: one local Ollama model, one cloud model.
 - A pure, ordered-rule `decide()` function picks the target from cheap heuristics and a privacy policy (`auto`, `local-only`, `cloud-only`).
 - Sessions are pinned to a target so the local prompt/KV cache stays warm. A pin only ever escalates local to cloud.
-- Local failure before the first byte fails over to cloud, unless policy is `local-only`.
+- Local failure before the first byte fails over to cloud, unless policy is `local-only`. A circuit breaker skips a dead local after 2 failures. Failovers never pin.
 - One metadata-only JSONL log line per request, and a `stats` command for latency and savings.
 - No UI, database, or background service.
 
@@ -43,6 +43,16 @@ slm-router stats --since 24h     # summarise the request log
 - If an upstream does not implement `/v1/responses` (a 404 or 405 without an OpenAI error body), the request fails with 501 `responses_unsupported`. This error never triggers failover.
 - If the stream breaks mid-way, the client gets an `event: error` frame with code `stream_interrupted`.
 - `GET` and `DELETE /v1/responses/{id}` are not proxied.
+
+### v0.3.0 notes
+
+- **Match the local context.** Set `[routing] local_max_context_tokens` to the context Ollama actually loads (`OLLAMA_CONTEXT_LENGTH`, or `context_length` in `ollama ps`). The default is 4096, Ollama's default. The router keeps 512 tokens of it free for the reply.
+- **Token estimate.** Prompt tokens are estimated from symbol density (letter runs, digit runs, symbols), with no tokenizer dependency. On fresh samples it is 0.90 to 1.45 times llama3.2's real count (`tests/tokens.rs`). chars/4 was 0.33 to 1.41, and it undercounted logs, JSON and CSV by about half. Qwen tokenizes digits one at a time, so numeric text runs higher than this estimate on a qwen local model.
+- **Rule 5 scoring.** The last user message scores +2 for any reasoning cue, +1 for each distinct hint cue (at most +2), +1 for code and +1 for big-O. It goes to cloud at `complexity_threshold` (2). Cues match whole words, so "prove" never matches "improve".
+- **Honest accuracy.** On the labelled prompts in `tests/fixtures/routing_eval.json`, the tuning (dev) split catches 30 of 33 hard prompts, and the untouched holdout catches 7 of 20. Neither split sends any easy prompt to cloud, and CI enforces that. Keywords catch about a third of unseen hard prompts that need domain knowledge, and closing that gap is the classifier's job on the roadmap.
+- **Circuit breaker.** After `[local] breaker_failures` (2) consecutive unreachable or 5xx replies, local is skipped for `breaker_cooldown_ms` (30 s), then one probe is let through. Skipped auto requests go to cloud with reason `circuit_open`. Forced-local and `local-only` requests get an immediate 503. The breaker is per process and in memory.
+- **Failovers no longer pin.** The next turn tries local again, or the breaker skips it.
+- **Live eval.** `python scripts/eval.py --log slm-router.jsonl` sends the labelled prompts plus tools, JSON-schema, long-context and pinned-conversation cases through a running router, then reports accuracy, misroutes, latency and misroute-adjusted savings from the log. `--drill-base` also times requests against a second router whose local model is down.
 
 ## v1 Local Benchmark
 
@@ -84,4 +94,5 @@ Read it with care: it is one run on one machine with a 1B model. The cache figur
 - [x] Upstream clients, streaming, failover
 - [x] JSONL logging and `stats` CLI
 - [x] v0.2.0: `/v1/responses` passthrough (streaming, stateful-to-cloud routing)
+- [x] v0.3.0: density token estimate, Rule 5 scoring, reply reserve, local circuit breaker
 - [ ] Post-v1: ONNX classifier, semantic cache, speculative verification, extra tiers

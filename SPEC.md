@@ -85,9 +85,9 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
   2. Existing pin, with one-way local-to-cloud escalation only.
   3. Capability: images, tools, tool_choice, or JSON-schema response format go to cloud unless `local_supports_tools` is set.
   4. Context: estimated tokens above `local_max_context_tokens` go to cloud.
-  5. Complexity: cloud if estimated prompt tokens exceed `complex_prompt_tokens` (default 1500), or the last user message exceeds 200 characters and matches a reasoning cue from a configurable list.
+  5. Complexity: cloud if estimated prompt tokens exceed `complex_prompt_tokens` (default 1500), or the last user message scores at least `complexity_threshold` (default 2): +2 for any reasoning cue, +1 per distinct hint cue (at most +2), +1 for code, +1 for big-O. Cues match whole words and both cue lists are configurable.
   6. Default: local.
-- Token estimate is characters divided by four, documented as approximate. No tokenizer dependency.
+- Token estimate is by symbol density (letter runs, digit runs, symbols) plus 4 per message, documented as approximate. No tokenizer dependency. Rule 4 and the forced-local context check keep 512 tokens free for the reply; `local_max_context_tokens` defaults to 4096.
 - The reason string is the rule name and is what gets logged.
 
 **Policy**
@@ -97,10 +97,11 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 **Sessions and pinning**
 - Session id comes from `X-Session-Id` when present, otherwise a one-way hash of the system prompt plus first user message. The log records which source was used.
 - In-memory table with idle TTL (config, default 300 s, documented as "match your OLLAMA_KEEP_ALIVE"), max size (default 10,000) and LRU eviction. TTL refreshes on each request. Concurrent requests on one session are allowed; first writer wins the pin. Nothing is persisted.
-- A pin to local may move to cloud (failover or escalation). A pin to cloud never moves to local.
+- A pin to local may move to cloud by escalation. Failovers do not pin. A pin to cloud never moves to local.
 
 **Failure handling**
-- Local connection refused, 5xx, or no first byte within `local_first_byte_timeout_ms` (default 15000) fails over to cloud, only before any bytes are sent to the client. The pin moves to cloud and the reason is `local_unavailable`.
+- Local connection refused, 5xx, or no first byte within `local_first_byte_timeout_ms` (default 15000) fails over to cloud, only before any bytes are sent to the client. The reason is `local_unavailable`, and the session is not pinned.
+- A circuit breaker opens after `breaker_failures` (default 2) consecutive local failures (unreachable or 5xx). For `breaker_cooldown_ms` (default 30000) local is skipped, then one probe is let through. A skipped auto request fails over with reason `circuit_open` and `failed_over` set. A skipped forced-local or `local-only` request returns 503.
 - Errors from the chosen target are the client's errors: status and body pass through unchanged, with no retry and no cross-target fallback. The only exception is the local-to-cloud failover above.
 - Mid-stream upstream failure ends the SSE stream with an OpenAI-style error event and logs a partial record. Client disconnect cancels the upstream request and logs tokens counted so far. There is no mid-stream failover.
 - All router-originated errors use the OpenAI error body shape with correct HTTP status codes.

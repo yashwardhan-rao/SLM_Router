@@ -34,6 +34,12 @@ model = "llama3.2"
 # should have stayed local. Default: 15000.
 first_byte_timeout_ms = 15000
 
+# Circuit breaker: after this many consecutive failures (unreachable or 5xx) local is skipped for
+# breaker_cooldown_ms, then one probe request is let through. Skipped auto requests go to the cloud
+# (reason "circuit_open"); forced-local and local-only requests get a 503. 0 disables it.
+breaker_failures = 2
+breaker_cooldown_ms = 30000
+
 [cloud]
 # Any OpenAI-compatible endpoint.
 base_url = "https://api.openai.com/v1"
@@ -46,18 +52,26 @@ api_key_env = "OPENAI_API_KEY"
 #   1. forced model (slm-router/local or slm-router/cloud) or policy
 #   2. an existing session pin (a session can move local -> cloud, never back)
 #   3. images, tools, tool_choice or a JSON-schema response_format -> cloud
-#   4. prompt longer than local_max_context_tokens -> cloud
-#   5. prompt longer than complex_prompt_tokens, or a long message with a reasoning cue -> cloud
+#   4. prompt longer than local_max_context_tokens minus 512 reserved for the reply -> cloud
+#   5. prompt longer than complex_prompt_tokens, or a last user message scoring at least
+#      complexity_threshold -> cloud
 #   6. otherwise local
-# Token counts are estimated as characters / 4.
+# Token counts are estimated from symbol density (letter runs, digit runs, symbols).
 
 # Set true if your local model handles tools and images; rule 3 is then skipped.
 local_supports_tools = false
-local_max_context_tokens = 8000
+# Match the context Ollama actually loads (OLLAMA_CONTEXT_LENGTH, or context_length in `ollama ps`).
+local_max_context_tokens = 4096
 complex_prompt_tokens = 1500
-# A reasoning cue only counts in a last user message longer than this many characters.
-cue_min_chars = 200
-reasoning_cues = ["prove", "step by step", "refactor", "analyze", "derive"]
+# Rule 5 score: +2 if any reasoning cue matches, +1 per distinct hint cue (at most +2), +1 for code
+# (a backtick, or two code markers such as `{`, `;`, `=>`, `::`), +1 for big-O like O(n).
+# Cues match whole words, case-insensitively; "lock-free" matches "lock free", and a cue's last word
+# may take a plural "s". Leave reasoning_cues and hint_cues out to keep the built-in lists.
+complexity_threshold = 2
+# Cues only count in a last user message longer than this many characters.
+cue_min_chars = 0
+# reasoning_cues = ["prove", "show that", "derive", "justify", "step by step", "analyze", "refactor", "trade off"]
+# hint_cues = ["bug", "debug", "fix", "compile", "race condition", "deadlock", "design", "why", "compare"]
 
 # Optional. Prices of the cloud model in USD per million tokens. They drive the `saved_usd`
 # figure (what a locally served request would have cost on the cloud). Without this table
