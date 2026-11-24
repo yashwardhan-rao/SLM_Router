@@ -45,3 +45,7 @@ Thumbs.db
 # Added by cargo
 
 /target
+
+# Local router config and request logs (slm-router.example.toml stays tracked)
+slm-router.toml
+*.jsonl
