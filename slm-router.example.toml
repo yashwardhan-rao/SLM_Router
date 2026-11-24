@@ -1,0 +1,79 @@
+# SLM_Router example configuration.
+#
+# Copy to slm-router.toml (the default location), or point at a file with
+#   slm-router serve --config path/to/file.toml
+#   ROUTER_CONFIG=path/to/file.toml slm-router serve
+#
+# Secrets never go in this file. They are read from environment variables:
+#   ROUTER_API_KEY   bearer token clients must send to the router (optional on loopback)
+#   <cloud.api_key_env>   the cloud provider key; the variable name is set below
+#
+# Unknown keys are rejected at startup, so a typo fails loudly instead of being ignored.
+
+[server]
+# Address to listen on. Loopback by default. Any other address makes ROUTER_API_KEY mandatory.
+bind = "127.0.0.1:8080"
+
+# Default routing policy:
+#   "auto"        route by content (default)
+#   "local-only"  never call the cloud; fail with 503 if the local model is down
+#   "cloud-only"  always use the cloud model
+# A client can send `X-Router-Policy` to make this stricter for one request, never looser.
+policy = "auto"
+
+# Largest request body in bytes. Requests with base64 images can be several MB. Default: 64 MiB.
+max_body_bytes = 67108864
+
+[local]
+# Any OpenAI-compatible endpoint. Ollama serves one under /v1.
+base_url = "http://127.0.0.1:11434/v1"
+model = "llama3.2"
+
+# How long to wait for the first byte before failing over to the cloud (auto-routed requests only).
+# Keep this longer than a cold model load; a short value sends requests to the cloud that
+# should have stayed local. Default: 15000.
+first_byte_timeout_ms = 15000
+
+[cloud]
+# Any OpenAI-compatible endpoint.
+base_url = "https://api.openai.com/v1"
+model = "gpt-4o"
+# Name of the environment variable that holds the cloud API key.
+api_key_env = "OPENAI_API_KEY"
+
+[routing]
+# Rules run in order and the first match wins:
+#   1. forced model (slm-router/local or slm-router/cloud) or policy
+#   2. an existing session pin (a session can move local -> cloud, never back)
+#   3. images, tools, tool_choice or a JSON-schema response_format -> cloud
+#   4. prompt longer than local_max_context_tokens -> cloud
+#   5. prompt longer than complex_prompt_tokens, or a long message with a reasoning cue -> cloud
+#   6. otherwise local
+# Token counts are estimated as characters / 4.
+
+# Set true if your local model handles tools and images; rule 3 is then skipped.
+local_supports_tools = false
+local_max_context_tokens = 8000
+complex_prompt_tokens = 1500
+# A reasoning cue only counts in a last user message longer than this many characters.
+cue_min_chars = 200
+reasoning_cues = ["prove", "step by step", "refactor", "analyze", "derive"]
+
+# Optional. Prices of the cloud model in USD per million tokens. They drive the `saved_usd`
+# figure (what a locally served request would have cost on the cloud). Without this table
+# `saved_usd` is null in the log and `n/a` in `slm-router stats`. Set your provider's real prices.
+# [pricing]
+# input_per_mtok = 2.50
+# output_per_mtok = 10.00
+
+[session]
+# A session stays on its target while it is active, which keeps the local prompt cache warm.
+# Set ttl_secs to match your OLLAMA_KEEP_ALIVE (Ollama's default is 5 minutes).
+ttl_secs = 300
+# Pins are kept in memory only; the least recently used one is dropped beyond this many.
+max_pins = 10000
+
+[log]
+# One JSON line per request: metadata only, never prompts, completions or keys.
+# The file only grows; there is no rotation. Read it with `slm-router stats`.
+path = "slm-router.jsonl"

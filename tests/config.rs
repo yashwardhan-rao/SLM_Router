@@ -62,3 +62,26 @@ fn secrets_come_from_the_environment_never_the_file() {
     assert_eq!(c.cloud.api_key.as_deref(), Some("sk-cloud"));
     assert_eq!(c.server.api_key.as_deref(), Some("router"));
 }
+
+#[test]
+fn max_body_bytes_defaults_to_64_mib_and_is_configurable() {
+    assert_eq!(
+        Config::from_toml(MINIMAL).unwrap().server.max_body_bytes,
+        67_108_864
+    );
+    let c = Config::from_toml(&format!("[server]\nmax_body_bytes = 1000\n{MINIMAL}")).unwrap();
+    assert_eq!(c.server.max_body_bytes, 1000);
+}
+
+#[test]
+fn empty_secret_env_vars_count_as_unset() {
+    let mut c = Config::from_toml(MINIMAL).unwrap();
+    c.resolve_secrets(|_| Some(String::new()));
+    assert_eq!((c.cloud.api_key, c.server.api_key), (None, None));
+}
+
+#[test]
+fn the_documented_example_config_parses_and_validates() {
+    let c = Config::from_toml(include_str!("../slm-router.example.toml")).unwrap();
+    assert!(c.validate().is_ok());
+}

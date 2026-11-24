@@ -2,6 +2,7 @@
 
 use super::{
     AppState,
+    guard::Guard,
     policy::{effective_policy, route_error},
     stream,
     telemetry::{new_record, saved_usd, usage},
@@ -15,7 +16,7 @@ use crate::{
 };
 use axum::{
     body::Bytes,
-    extract::State,
+    extract::{State, rejection::BytesRejection},
     http::{HeaderMap, StatusCode, header::CONTENT_TYPE},
     response::{IntoResponse, Response},
 };
@@ -32,8 +33,11 @@ fn relay(r: Reply) -> Response {
 pub async fn chat(
     State(s): State<Arc<AppState>>,
     headers: HeaderMap,
-    body: Bytes,
+    body: Result<Bytes, BytesRejection>,
 ) -> Result<Response, ApiError> {
+    // Over-limit bodies get an OpenAI-style 413 instead of axum's plain-text one.
+    let body =
+        body.map_err(|e| ApiError::new(e.status(), "invalid_request_error", e.body_text()))?;
     let mut req: ChatRequest = serde_json::from_slice(&body)
         .map_err(|e| ApiError::bad_request(format!("invalid request body: {e}")))?;
     let policy = effective_policy(s.cfg.server.policy, headers.get("x-router-policy"))?;
@@ -44,7 +48,11 @@ pub async fn chat(
     let decision = decide(&feats, &s.cfg.routing, policy, s.pins.get(&sid)).map_err(route_error)?;
 
     let seq = s.seq.fetch_add(1, Ordering::Relaxed);
-    let mut rec = new_record(seq, sid.clone(), source, policy);
+    let mut rec = Guard::new(
+        s.clone(),
+        new_record(seq, sid.clone(), source, policy),
+        started,
+    );
     rec.target = decision.target;
     rec.reason = decision.reason;
     rec.pinned = decision.reason == Reason::Pinned;
@@ -57,8 +65,7 @@ pub async fn chat(
         if decision.reason == Reason::Forced || policy == Policy::LocalOnly {
             rec.status = 503;
             rec.outcome = "upstream_error";
-            rec.total_ms = started.elapsed().as_millis() as u64;
-            s.logger.write(&rec);
+            rec.log();
             return Err(ApiError::upstream(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "local model unavailable and cloud fallback is not allowed",
@@ -88,14 +95,13 @@ pub async fn chat(
                 rec.tokens_estimated,
             ) = (p, c, est);
             rec.saved_usd = saved_usd(rec.target, s.cfg.pricing, p, c);
-            rec.total_ms = started.elapsed().as_millis() as u64;
-            s.logger.write(&rec);
+            rec.log();
             Ok(relay(reply))
         }
         // The relay task owns the record and logs it when the stream ends.
         Ok(Opened::Stream(head)) => Ok(stream::relay(
             s,
-            rec,
+            rec.into_record(),
             started,
             head,
             feats.est_prompt_tokens,
@@ -103,8 +109,7 @@ pub async fn chat(
         Err(e) => {
             rec.status = 502;
             rec.outcome = "upstream_error";
-            rec.total_ms = started.elapsed().as_millis() as u64;
-            s.logger.write(&rec);
+            rec.log();
             Err(ApiError::upstream(
                 StatusCode::BAD_GATEWAY,
                 format!("upstream unreachable: {}", e.0),

@@ -54,7 +54,8 @@ impl Logger {
                     .create(true)
                     .append(true)
                     .open(&self.path)?;
-                writeln!(f, "{line}")
+                // One write call: two writes (`writeln!`) can interleave with another request's line.
+                f.write_all(format!("{line}\n").as_bytes())
             });
         if let Err(e) = result {
             eprintln!("slm-router: log write failed: {e}");

@@ -41,7 +41,10 @@ async fn run(cli: Cli) -> Result<(), String> {
         }
         Command::Stats { config, since } => {
             let since = since.as_deref().map(stats::parse_duration).transpose()?;
-            let cfg = Config::load(&config, None)?;
+            // Only the log path is needed; serve-only checks (bind, ROUTER_API_KEY) do not apply.
+            let text = std::fs::read_to_string(&config)
+                .map_err(|e| format!("cannot read {config}: {e}"))?;
+            let cfg = Config::from_toml(&text)?;
             match std::fs::read_to_string(&cfg.log.path) {
                 Ok(log) => println!("{}", stats::report(&log, logging::now_ms(), since)),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {

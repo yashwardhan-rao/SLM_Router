@@ -25,6 +25,8 @@ pub struct Config {
 pub struct ServerCfg {
     pub bind: String,
     pub policy: Policy,
+    /// Largest accepted request body. Base64 images make bodies big, so the default is generous.
+    pub max_body_bytes: usize,
     /// From `ROUTER_API_KEY`; clients must send it as a bearer token when set.
     #[serde(skip)]
     pub api_key: Option<String>,
@@ -35,6 +37,7 @@ impl Default for ServerCfg {
         Self {
             bind: "127.0.0.1:8080".into(),
             policy: Policy::Auto,
+            max_body_bytes: 64 * 1024 * 1024,
             api_key: None,
         }
     }
@@ -120,6 +123,8 @@ impl Config {
     }
 
     pub fn resolve_secrets(&mut self, env: impl Fn(&str) -> Option<String>) {
+        // An empty variable (`KEY=` in a .env template) counts as unset, never as an empty secret.
+        let env = |k: &str| env(k).filter(|v| !v.is_empty());
         self.cloud.api_key = env(&self.cloud.api_key_env);
         self.server.api_key = env("ROUTER_API_KEY");
     }

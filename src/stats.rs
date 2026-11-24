@@ -21,14 +21,17 @@ pub fn parse_duration(s: &str) -> Result<Duration, String> {
     let split = s.len().saturating_sub(1);
     let (num, unit) = s.split_at_checked(split).ok_or_else(bad)?;
     let n: u64 = num.parse().map_err(|_| bad())?;
-    let secs = match unit {
-        "s" => 1,
-        "m" => 60,
-        "h" => 3600,
-        "d" => 86_400,
+    let ms_per_unit: u64 = match unit {
+        "s" => 1_000,
+        "m" => 60_000,
+        "h" => 3_600_000,
+        "d" => 86_400_000,
         _ => return Err(bad()),
     };
-    Ok(Duration::from_secs(n * secs))
+    // Milliseconds, because that is what the log timestamps use; a bigger value cannot be compared.
+    n.checked_mul(ms_per_unit)
+        .map(Duration::from_millis)
+        .ok_or_else(bad)
 }
 
 /// Nearest-rank percentile of an ascending slice.

@@ -1,6 +1,7 @@
 //! The axum application: bearer auth, `/v1/models`, `/v1/chat/completions`.
 
 mod chat;
+mod guard;
 mod policy;
 mod sse;
 mod stream;
@@ -9,7 +10,7 @@ mod telemetry;
 use crate::{config::Config, errors::ApiError, logging::Logger, session::PinStore};
 use axum::{
     Json, Router,
-    extract::{Request, State},
+    extract::{DefaultBodyLimit, Request, State},
     http::header::AUTHORIZATION,
     middleware::{Next, from_fn_with_state},
     response::{IntoResponse, Response},
@@ -28,6 +29,12 @@ pub struct AppState {
 }
 
 pub fn router(cfg: Config) -> Router {
+    let body_limit = cfg.server.max_body_bytes;
+    let http = reqwest::Client::builder()
+        // A provider that stalls (no bytes for this long) ends the request instead of hanging it.
+        .read_timeout(Duration::from_secs(120))
+        .build()
+        .expect("reqwest client builds with its default TLS backend");
     let state = Arc::new(AppState {
         pins: PinStore::new(
             Duration::from_secs(cfg.session.ttl_secs),
@@ -35,12 +42,13 @@ pub fn router(cfg: Config) -> Router {
         ),
         logger: Logger::new(&cfg.log.path),
         seq: AtomicU64::new(0),
-        http: reqwest::Client::new(),
+        http,
         cfg,
     });
     Router::new()
         .route("/v1/models", get(models))
         .route("/v1/chat/completions", post(chat::chat))
+        .layer(DefaultBodyLimit::max(body_limit))
         .layer(from_fn_with_state(state.clone(), auth))
         .with_state(state)
 }

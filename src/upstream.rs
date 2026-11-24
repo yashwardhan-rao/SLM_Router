@@ -49,10 +49,10 @@ fn request<T: Serialize>(
     }
 }
 
-async fn within<F: Future<Output = Result<Opened, Unreachable>>>(
+async fn within<T, F: Future<Output = Result<T, Unreachable>>>(
     limit: Option<Duration>,
     fut: F,
-) -> Result<Opened, Unreachable> {
+) -> Result<T, Unreachable> {
     match limit {
         Some(d) => tokio::time::timeout(d, fut)
             .await
@@ -70,22 +70,18 @@ pub async fn post_json<T: Serialize>(
 ) -> Result<Reply, Unreachable> {
     let rb = request(client, base_url, api_key, body);
     let started = Instant::now();
-    let opened = within(first_byte, async {
+    within(first_byte, async {
         let resp = rb.send().await.map_err(unreachable_err)?;
         let ttfb_ms = started.elapsed().as_millis() as u64;
         let status = resp.status().as_u16();
         let body = resp.bytes().await.map_err(unreachable_err)?;
-        Ok(Opened::Full(Reply {
+        Ok(Reply {
             status,
             body,
             ttfb_ms,
-        }))
+        })
     })
-    .await?;
-    match opened {
-        Opened::Full(reply) => Ok(reply),
-        Opened::Stream(_) => unreachable!("post_json never opens a stream"),
-    }
+    .await
 }
 
 /// Send a `stream: true` request and wait for the first body chunk (within `first_byte`).

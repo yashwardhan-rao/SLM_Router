@@ -23,6 +23,11 @@ fn line(
 }
 
 fn run_stats(log_lines: Option<&[String]>, extra: &[&str]) -> Output {
+    run_stats_with("", log_lines, extra)
+}
+
+/// `prefix` is TOML placed before the required sections, e.g. a `[server]` table.
+fn run_stats_with(prefix: &str, log_lines: Option<&[String]>, extra: &[&str]) -> Output {
     let dir = TempDir::new();
     let log = dir.log();
     if let Some(lines) = log_lines {
@@ -30,7 +35,7 @@ fn run_stats(log_lines: Option<&[String]>, extra: &[&str]) -> Output {
     }
     let cfg = dir.0.join("c.toml");
     let toml = format!(
-        "[local]\nbase_url = \"http://x/v1\"\nmodel = \"m\"\n[cloud]\nbase_url = \"http://y/v1\"\n\
+        "{prefix}[local]\nbase_url = \"http://x/v1\"\nmodel = \"m\"\n[cloud]\nbase_url = \"http://y/v1\"\n\
          model = \"m\"\napi_key_env = \"X\"\n[log]\npath = {:?}\n",
         log.to_str().unwrap()
     );
@@ -109,4 +114,27 @@ fn bad_since_value_fails_with_a_message() {
     let out = run_stats(Some(&sample()), &["--since", "soon"]);
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("--since"));
+}
+
+#[test]
+fn stats_does_not_apply_serve_only_validation() {
+    // A server config that binds publicly needs ROUTER_API_KEY to serve, but not to read a report.
+    let server = "[server]\nbind = \"0.0.0.0:8080\"\n";
+    let out = run_stats_with(server, Some(&sample()), &[]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(stdout(&out).contains("requests: 7"));
+}
+
+#[test]
+fn a_huge_since_value_is_a_clean_error_not_a_panic() {
+    let out = run_stats(Some(&sample()), &["--since", "213503982334601d"]);
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !out.status.success() && err.contains("--since") && !err.contains("panicked"),
+        "{err}"
+    );
 }

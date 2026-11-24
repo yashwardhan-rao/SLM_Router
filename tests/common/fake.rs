@@ -1,7 +1,7 @@
 //! In-process fake OpenAI-compatible upstreams on ephemeral ports.
 use axum::{
-    Json, Router, body::Body, extract::State, http::HeaderMap, http::StatusCode,
-    response::IntoResponse, routing::post,
+    Json, Router, body::Body, extract::DefaultBodyLimit, extract::State, http::HeaderMap,
+    http::StatusCode, response::IntoResponse, routing::post,
 };
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex, atomic::AtomicBool, atomic::Ordering};
@@ -161,6 +161,7 @@ pub async fn fake(mode: Mode, tag: &'static str) -> Fake {
     };
     let app = Router::new()
         .route("/v1/chat/completions", post(handle))
+        .layer(DefaultBodyLimit::disable())
         .with_state(shared);
     Fake {
         url: format!("{}/v1", spawn(app).await),

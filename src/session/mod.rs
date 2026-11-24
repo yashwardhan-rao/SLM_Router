@@ -12,6 +12,9 @@ use tokio::time::Instant;
 #[cfg(test)]
 mod tests;
 
+/// Longest accepted `X-Session-Id`, in bytes.
+const MAX_SESSION_ID: usize = 128;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SessionSource {
@@ -21,7 +24,8 @@ pub enum SessionSource {
 
 /// `X-Session-Id` when given, else a hash of the system prompt plus the first user message.
 pub fn session_id(header: Option<&str>, req: &ChatRequest) -> (String, SessionSource) {
-    if let Some(h) = header.filter(|h| !h.is_empty()) {
+    // Long ids would bloat the pin table and the log; those clients get a fingerprint instead.
+    if let Some(h) = header.filter(|h| !h.is_empty() && h.len() <= MAX_SESSION_ID) {
         return (h.to_string(), SessionSource::Header);
     }
     let first = |role: &str| {
