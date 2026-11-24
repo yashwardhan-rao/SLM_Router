@@ -1,4 +1,5 @@
 pub mod app;
+pub mod circuit;
 pub mod cli;
 pub mod config;
 pub mod errors;
