@@ -6,4 +6,5 @@ pub mod logging;
 pub mod routing;
 pub mod schema;
 pub mod session;
+pub mod stats;
 pub mod upstream;

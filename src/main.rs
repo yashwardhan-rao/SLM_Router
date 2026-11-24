@@ -4,6 +4,7 @@ use slm_router::{
     app,
     cli::{Cli, Command},
     config::Config,
+    logging, stats,
     upstream::post_json,
 };
 use std::{process::ExitCode, time::Duration};
@@ -38,7 +39,18 @@ async fn run(cli: Cli) -> Result<(), String> {
                 .await
                 .map_err(|e| e.to_string())
         }
-        Command::Stats { .. } => Err("`stats` is not implemented yet".into()),
+        Command::Stats { config, since } => {
+            let since = since.as_deref().map(stats::parse_duration).transpose()?;
+            let cfg = Config::load(&config, None)?;
+            match std::fs::read_to_string(&cfg.log.path) {
+                Ok(log) => println!("{}", stats::report(&log, logging::now_ms(), since)),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    println!("no requests logged yet")
+                }
+                Err(e) => return Err(format!("cannot read {}: {e}", cfg.log.path)),
+            }
+            Ok(())
+        }
     }
 }
 

@@ -84,14 +84,10 @@ async fn forced_model_and_policy_header_conflict_is_a_400_openai_error() {
 }
 
 #[tokio::test]
-async fn malformed_body_is_a_400_and_streaming_is_an_explicit_501() {
+async fn malformed_body_is_a_400_openai_error() {
     let r = default_rig().await;
-    let (s, _) = post_chat(&r.base, &json!({"nope": 1}), &[]).await;
+    let (s, body) = post_chat(&r.base, &json!({"nope": 1}), &[]).await;
     assert_eq!(s, 400);
-    let mut req = user("hi");
-    req["stream"] = json!(true);
-    let (s, body) = post_chat(&r.base, &req, &[]).await;
-    assert_eq!(s, 501);
     assert!(body["error"]["message"].is_string());
 }
 

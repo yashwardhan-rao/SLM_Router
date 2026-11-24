@@ -30,9 +30,9 @@ Runs offline, with no Ollama and no network.
 
 - [x] Repository setup and development guidelines
 - [x] v1 spec
-- [ ] Pure routing core (`decide()`) with unit tests
-- [ ] axum gateway: `/v1/chat/completions`, `/v1/models`
-- [ ] Session pinning and policy
-- [ ] Upstream clients, streaming, failover
-- [ ] JSONL logging and `stats` CLI
+- [x] Pure routing core (`decide()`) with unit tests
+- [x] axum gateway: `/v1/chat/completions` (streaming and non-streaming), `/v1/models`
+- [x] Session pinning and policy
+- [x] Upstream clients, streaming, failover
+- [x] JSONL logging and `stats` CLI
 - [ ] Post-v1: ONNX classifier, semantic cache, speculative verification, extra tiers

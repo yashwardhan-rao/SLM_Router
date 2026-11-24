@@ -1,6 +1,9 @@
 //! The axum application: bearer auth, `/v1/models`, `/v1/chat/completions`.
 
 mod chat;
+mod policy;
+mod sse;
+mod stream;
 mod telemetry;
 
 use crate::{config::Config, errors::ApiError, logging::Logger, session::PinStore};
