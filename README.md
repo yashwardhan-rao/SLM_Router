@@ -89,7 +89,7 @@ An effective routing engine balances classification overhead against token savin
 
 ## 5. Project Roadmap
 
-- [x] Initial repository setup & development guidelines ([GEMINI.md](GEMINI.md))
+- [x] Initial repository setup & development guidelines ([CLAUDE.md](CLAUDE.md))
 - [x] Package manifests & environment hygiene configuration
 - [ ] Comprehensive Product Requirements Document (PRD)
 - [ ] FastAPI gateway skeleton with OpenAI-compatible `/v1/chat/completions` endpoint
