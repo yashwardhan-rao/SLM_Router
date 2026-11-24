@@ -2,8 +2,11 @@
 
 use serde::{Deserialize, Serialize};
 
+mod complexity;
 #[cfg(test)]
 mod tests;
+
+pub use complexity::RoutingConfig;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -73,30 +76,6 @@ pub struct Features {
     pub requires_cloud: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct RoutingConfig {
-    pub local_supports_tools: bool,
-    pub local_max_context_tokens: usize,
-    pub complex_prompt_tokens: usize,
-    pub cue_min_chars: usize,
-    pub reasoning_cues: Vec<String>,
-}
-
-impl Default for RoutingConfig {
-    fn default() -> Self {
-        Self {
-            local_supports_tools: false,
-            local_max_context_tokens: 4096,
-            complex_prompt_tokens: 1500,
-            cue_min_chars: 200,
-            reasoning_cues: ["prove", "step by step", "refactor", "analyze", "derive"]
-                .map(String::from)
-                .to_vec(),
-        }
-    }
-}
-
 /// Tokens kept free in the local context for the reply.
 const REPLY_RESERVE: usize = 512;
 
@@ -119,20 +98,12 @@ fn auto_route(f: &Features, cfg: &RoutingConfig) -> Decision {
     if over_context(f, cfg) {
         return dec(Target::Cloud, Reason::Context);
     }
-    if f.est_prompt_tokens > cfg.complex_prompt_tokens || has_reasoning_cue(f, cfg) {
+    if f.est_prompt_tokens > cfg.complex_prompt_tokens
+        || complexity::score(&f.last_user_text, cfg) >= cfg.complexity_threshold
+    {
         return dec(Target::Cloud, Reason::Complexity);
     }
     dec(Target::Local, Reason::Default)
-}
-
-fn has_reasoning_cue(f: &Features, cfg: &RoutingConfig) -> bool {
-    if f.last_user_text.chars().count() <= cfg.cue_min_chars {
-        return false;
-    }
-    let text = f.last_user_text.to_lowercase();
-    cfg.reasoning_cues
-        .iter()
-        .any(|c| text.contains(&c.to_lowercase()))
 }
 
 pub fn decide(

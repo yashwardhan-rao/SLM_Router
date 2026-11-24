@@ -97,14 +97,14 @@ fn rule5_long_message_with_reasoning_cue_routes_to_cloud() {
 }
 
 #[test]
-fn rule5_short_message_with_reasoning_cue_stays_local() {
+fn rule5_short_message_with_reasoning_cue_routes_to_cloud() {
     let f = Features {
         last_user_text: "prove it".into(),
         ..Default::default()
     };
     assert_eq!(
         route(&f, Policy::Auto, None),
-        ok(Target::Local, Reason::Default)
+        ok(Target::Cloud, Reason::Complexity)
     );
 }
 
