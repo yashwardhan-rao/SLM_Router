@@ -1,6 +1,7 @@
 //! The axum application: bearer auth, `/v1/models`, `/v1/chat/completions`.
 
 mod chat;
+mod dispatch;
 mod guard;
 mod policy;
 mod sse;

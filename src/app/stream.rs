@@ -1,7 +1,10 @@
 //! Relay an upstream event stream to the client, then write its log record.
 
 use super::{AppState, sse::SseScan, telemetry::saved_usd};
-use crate::{logging::Record, upstream::StreamHead};
+use crate::{
+    logging::Record,
+    upstream::{Api, StreamHead},
+};
 use axum::{
     body::{Body, Bytes},
     http::{HeaderValue, StatusCode, header},
@@ -11,9 +14,17 @@ use std::{convert::Infallible, sync::Arc, time::Instant};
 use tokio::sync::mpsc::{self, Sender};
 use tokio_stream::wrappers::ReceiverStream;
 
-const INTERRUPTED: &str = concat!(
+const INTERRUPTED_CHAT: &str = concat!(
     r#"data: {"error":{"message":"upstream connection lost mid-stream","#,
     r#""type":"upstream_error","code":"stream_interrupted"}}"#,
+    "\n\n"
+);
+
+/// Responses-API clients dispatch on the `event:` name, so they get a native `error` event.
+const INTERRUPTED_RESPONSES: &str = concat!(
+    "event: error\n",
+    r#"data: {"type":"error","code":"stream_interrupted","#,
+    r#""message":"upstream connection lost mid-stream","param":null}"#,
     "\n\n"
 );
 
@@ -25,12 +36,17 @@ pub fn relay(
     started: Instant,
     head: StreamHead,
     est_prompt: usize,
+    api: Api,
 ) -> Response {
     let (status, ctype) = (head.status, head.content_type.clone());
     (rec.status, rec.ttfb_ms) = (head.status, head.ttfb_ms);
     let (tx, rx) = mpsc::channel::<Result<Bytes, Infallible>>(16);
+    let interrupted = match api {
+        Api::Chat => INTERRUPTED_CHAT,
+        Api::Responses => INTERRUPTED_RESPONSES,
+    };
     tokio::spawn(async move {
-        let (outcome, scan) = pump(head, &tx).await;
+        let (outcome, scan) = pump(head, &tx, interrupted).await;
         let (p, c, est) = scan.tokens(est_prompt);
         rec.outcome = outcome;
         (
@@ -54,7 +70,11 @@ pub fn relay(
 
 /// Forward chunks until the stream ends, the upstream dies or the client goes away.
 /// Returning drops the upstream response, which cancels the upstream request.
-async fn pump(head: StreamHead, tx: &Sender<Result<Bytes, Infallible>>) -> (&'static str, SseScan) {
+async fn pump(
+    head: StreamHead,
+    tx: &Sender<Result<Bytes, Infallible>>,
+    interrupted: &'static str,
+) -> (&'static str, SseScan) {
     let mut scan = SseScan::default();
     let mut resp = head.resp;
     let mut next = Some(head.first);
@@ -76,7 +96,7 @@ async fn pump(head: StreamHead, tx: &Sender<Result<Bytes, Infallible>>) -> (&'st
             Ok(None) => return ("ok", scan),
             Err(_) => {
                 let _ = tx
-                    .send(Ok(Bytes::from_static(INTERRUPTED.as_bytes())))
+                    .send(Ok(Bytes::from_static(interrupted.as_bytes())))
                     .await;
                 return ("stream_error", scan);
             }

@@ -35,13 +35,30 @@ fn unreachable_err(e: reqwest::Error) -> Unreachable {
     Unreachable(e.to_string())
 }
 
+/// Which OpenAI endpoint a request goes to; both are relayed byte for byte.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Api {
+    Chat,
+    Responses,
+}
+
+impl Api {
+    pub fn path(self) -> &'static str {
+        match self {
+            Api::Chat => "chat/completions",
+            Api::Responses => "responses",
+        }
+    }
+}
+
 fn request<T: Serialize>(
     client: &reqwest::Client,
     base_url: &str,
+    api: Api,
     api_key: Option<&str>,
     body: &T,
 ) -> reqwest::RequestBuilder {
-    let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
+    let url = format!("{}/{}", base_url.trim_end_matches('/'), api.path());
     let rb = client.post(url).json(body);
     match api_key {
         Some(k) => rb.bearer_auth(k),
@@ -64,11 +81,12 @@ async fn within<T, F: Future<Output = Result<T, Unreachable>>>(
 pub async fn post_json<T: Serialize>(
     client: &reqwest::Client,
     base_url: &str,
+    api: Api,
     api_key: Option<&str>,
     body: &T,
     first_byte: Option<Duration>,
 ) -> Result<Reply, Unreachable> {
-    let rb = request(client, base_url, api_key, body);
+    let rb = request(client, base_url, api, api_key, body);
     let started = Instant::now();
     within(first_byte, async {
         let resp = rb.send().await.map_err(unreachable_err)?;
@@ -89,11 +107,12 @@ pub async fn post_json<T: Serialize>(
 pub async fn open_stream<T: Serialize>(
     client: &reqwest::Client,
     base_url: &str,
+    api: Api,
     api_key: Option<&str>,
     body: &T,
     first_byte: Option<Duration>,
 ) -> Result<Opened, Unreachable> {
-    let rb = request(client, base_url, api_key, body);
+    let rb = request(client, base_url, api, api_key, body);
     let started = Instant::now();
     within(first_byte, async {
         let mut resp = rb.send().await.map_err(unreachable_err)?;

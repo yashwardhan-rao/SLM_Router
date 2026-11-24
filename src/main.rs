@@ -5,7 +5,7 @@ use slm_router::{
     cli::{Cli, Command},
     config::Config,
     logging, stats,
-    upstream::post_json,
+    upstream::{Api, post_json},
 };
 use std::{process::ExitCode, time::Duration};
 
@@ -68,6 +68,7 @@ async fn warm_up(cfg: &Config) {
     let r = post_json(
         &reqwest::Client::new(),
         &cfg.local.base_url,
+        Api::Chat,
         None,
         &body,
         wait,
