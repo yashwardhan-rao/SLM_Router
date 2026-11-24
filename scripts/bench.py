@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Send 20 mixed requests to a running slm-router, to generate real `slm-router stats` numbers.
+"""Send up to 20 mixed requests (15 with --skip-complex) to a running slm-router, to generate real
+`slm-router stats` numbers.
 
 Standard library only. Start the router first (`slm-router serve --warmup`), then:
 
     python scripts/bench.py                 # auto routing: complex prompts may call the CLOUD (costs money)
     python scripts/bench.py --local-only    # forbid the cloud for every request
+    python scripts/bench.py --skip-complex  # auto routing without the prompts that go to the cloud
 
 Afterwards run `slm-router stats` to see the routing split, latency and savings.
 """
@@ -72,7 +74,11 @@ def post(base, key, body, headers, stream=False, timeout=120):
                 return resp.status, first, time.perf_counter() - start, "-", "%d events" % events
             data = json.load(resp)
             took = time.perf_counter() - start
-            return resp.status, took, took, data.get("model", "?"), ""
+            # Ollama reports how much of the prompt came from its KV cache; show it when present.
+            usage = data.get("usage") or {}
+            cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens")
+            detail = "" if cached is None else "prompt %s cached %s" % (usage.get("prompt_tokens", "?"), cached)
+            return resp.status, took, took, data.get("model", "?"), detail
     except urllib.error.HTTPError as e:
         took = time.perf_counter() - start
         return e.code, took, took, "-", e.read(200).decode(errors="replace").strip()
@@ -82,7 +88,7 @@ def chat(content, **extra):
     return {"model": "slm-router/auto", "messages": [{"role": "user", "content": content}], **extra}
 
 
-def build_plan():
+def build_plan(skip_complex=False):
     plan = [("simple", chat(p), {}, False) for p in SIMPLE]
     history = []
     for turn in TURNS:  # one session: every turn after the first should be pinned
@@ -94,7 +100,8 @@ def build_plan():
         plan.append(("stream-auto", chat(p, stream=True), {}, True))
     for p in SIMPLE[2:4]:
         plan.append(("stream-local", chat(p, stream=True, model="slm-router/local"), {}, True))
-    plan += [("complex", chat(p), {}, False) for p in COMPLEX]
+    if not skip_complex:
+        plan += [("complex", chat(p), {}, False) for p in COMPLEX]
     return plan
 
 
@@ -103,10 +110,11 @@ def main():
     ap.add_argument("--base", default="http://127.0.0.1:8080/v1", help="router base URL (default: %(default)s)")
     ap.add_argument("--key", default=os.environ.get("ROUTER_API_KEY"), help="router bearer token (default: $ROUTER_API_KEY)")
     ap.add_argument("--local-only", action="store_true", help="send X-Router-Policy: local-only so nothing reaches the cloud")
+    ap.add_argument("--skip-complex", action="store_true", help="leave out the 5 reasoning prompts that auto routing sends to the cloud")
     ap.add_argument("--timeout", type=float, default=120, help="seconds per request (default: %(default)s)")
     args = ap.parse_args()
 
-    plan = build_plan()
+    plan = build_plan(args.skip_complex)
     print("%d requests -> %s%s" % (len(plan), args.base, "  [local-only]" if args.local_only else ""))
     failures = 0
     for i, (kind, body, headers, stream) in enumerate(plan, 1):
