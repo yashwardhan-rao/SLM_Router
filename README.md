@@ -50,6 +50,19 @@ One run of `python scripts/bench.py --skip-complex` against a release build, wit
 | Ollama cache reuse | follow-up turns of the session: 372 of 420 prompt tokens (89%); single prompts: 138 of 207 (67%, mostly a fixed ~20-token template prefix) |
 | Binary | 7.1 MiB (release, x86_64 Windows) |
 
+### A/B: pinned session vs unique session IDs
+
+Two 5-turn conversations on the same model, real replies fed back as history (`max_tokens` 120), auto policy, cloud pricing `input_per_mtok = 3.00`, `output_per_mtok = 15.00` (the cloud was never called). One run each.
+
+| | Same `X-Session-Id` | Unique ID per turn |
+| :--- | :--- | :--- |
+| Routing | 5 local, 0 cloud | 5 local, 0 cloud |
+| `saved_usd` | **$0.012882** | **$0.013017** |
+| Cache reuse, follow-up turns (2 to 5) | 1,464 of 1,594 prompt tokens (92%) | 1,509 of 1,594 (95%) |
+| Latency, local p50 / p95 | 476 / 530 ms | 472 / 564 ms |
+
+No measurable difference. With every turn routed local, a pin changes nothing, and Ollama's cache matches on the prompt prefix, not the session ID. The gaps come from run-to-run noise in the generated text. A pin only pays off when the unpinned conversation would switch targets mid-session, and this run does not exercise that. In a first attempt without `max_tokens`, turn 5 passed the 1,500-token complexity threshold and went to the cloud, which is that case; that attempt was discarded.
+
 Read it with care: it is one run on one machine with a 1B model. The cache figures are Ollama's own `cached_tokens`; every request stayed local, so this run does not measure what pinning saves compared with bouncing between targets. Token counts for the 4 streamed requests are estimates (Ollama sends no usage chunk unless the client asks for it), so "tokens kept local" is partly estimated. No pricing was configured, so there is no dollar figure.
 
 ## Roadmap
