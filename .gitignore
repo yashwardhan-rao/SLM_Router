@@ -49,3 +49,7 @@ Thumbs.db
 # Local router config and request logs (slm-router.example.toml stays tracked)
 slm-router.toml
 *.jsonl
+
+# v0.4.0 classifier corpus: prompts and labels are tracked, the 1B answer cache is not
+!data/rule5_prompts.jsonl
+!data/rule5_labels.jsonl
