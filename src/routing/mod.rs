@@ -3,6 +3,9 @@
 use serde::{Deserialize, Serialize};
 
 mod complexity;
+#[cfg_attr(not(test), allow(dead_code))]
+// shortcut: unused until the classifier lands (v0.4.0 step 5)
+mod features;
 #[cfg(test)]
 mod tests;
 

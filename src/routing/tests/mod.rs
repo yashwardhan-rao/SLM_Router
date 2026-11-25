@@ -9,5 +9,6 @@ fn ok(target: Target, reason: Reason) -> Result<Decision, RouteError> {
 }
 mod complexity;
 mod content;
+mod features;
 mod policy;
 mod stateful;

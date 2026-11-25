@@ -46,7 +46,7 @@ const CODE_MARKERS: [&str; 10] = [
 ];
 
 /// Lowercase words split on anything that is not a letter or digit, so "lock-free" is "lock free".
-fn words(text: &str) -> Vec<String> {
+pub(super) fn words(text: &str) -> Vec<String> {
     text.to_lowercase()
         .split(|c: char| !c.is_alphanumeric())
         .filter(|w| !w.is_empty())
@@ -66,7 +66,7 @@ fn has_cue(text: &[String], cue: &str) -> bool {
     })
 }
 
-fn big_o(lower: &str) -> bool {
+pub(super) fn big_o(lower: &str) -> bool {
     ["o(n", "o(log", "o(1)"].iter().any(|p| {
         lower.match_indices(p).any(|(i, _)| {
             !lower[..i]
@@ -86,7 +86,7 @@ fn has_ident_marker(text: &str, mid: u8, needs_after: bool) -> bool {
     })
 }
 
-fn is_code(text: &str) -> bool {
+pub(super) fn is_code(text: &str) -> bool {
     let markers = CODE_MARKERS.iter().filter(|m| text.contains(**m)).count()
         + usize::from(has_ident_marker(text, b'_', true))
         + usize::from(has_ident_marker(text, b'(', false));
