@@ -138,7 +138,7 @@ Why the dollars did not move: most of the raw saving the keyword router appeared
 
 ### v0.5.0: exact token counts on streams
 
-One live run of the release binary against Ollama 0.40.18 (`llama3.2:1b` local, `qwen2.5-coder:7b` standing in for cloud): 4 requests, 3 of them streamed, all with `tokens_estimated: false`. Before v0.5.0 every streamed request was estimated, because neither Ollama nor OpenAI send usage on a stream unless asked. Clients that did not set `include_usage` received no `choices: []` chunk. A CUDA prompt with no cue words went to cloud with `classifier_score` 0.942; "hi" scored 0.339.
+One live run of the release binary against Ollama 0.40.18 (`llama3.2:1b` local, `qwen2.5-coder:7b` standing in for cloud): 4 requests, 3 of them streamed, all with `tokens_estimated: false`. Before v0.5.0 every streamed chat request was estimated, because neither Ollama nor OpenAI send usage on a stream unless asked. Clients that did not set `include_usage` received no `choices: []` chunk. A CUDA prompt with no cue words went to cloud with `classifier_score` 0.942; "hi" scored 0.339.
 
 ### v1 local benchmark
 
