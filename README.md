@@ -261,6 +261,8 @@ tests/                   integration tests against fake upstreams, eval and pari
 
 ## Roadmap
 
+Shipped versions are ticked below. The full release history is in [CHANGELOG.md](CHANGELOG.md).
+
 - [x] Pure routing core (`decide()`) with unit tests
 - [x] axum gateway: `/v1/chat/completions` (streaming and non-streaming), `/v1/models`
 - [x] Session pinning and policy
