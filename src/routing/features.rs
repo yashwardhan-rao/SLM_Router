@@ -26,17 +26,17 @@ impl Sparse {
             bits: [0; BUCKETS / 64],
         };
         let ws = words(text);
+        let (mut padded, mut ends) = (String::new(), Vec::new());
         for (i, w) in ws.iter().enumerate() {
             s.set(&[b"w:", w.as_bytes()]);
             if let Some(next) = ws.get(i + 1) {
                 s.set(&[b"b:", w.as_bytes(), b" ", next.as_bytes()]);
             }
-            let padded = format!(" {w} ");
-            let ends: Vec<usize> = padded
-                .char_indices()
-                .map(|(i, _)| i)
-                .chain([padded.len()])
-                .collect();
+            padded.clear();
+            padded.extend([" ", w, " "]);
+            ends.clear();
+            ends.extend(padded.char_indices().map(|(i, _)| i));
+            ends.push(padded.len());
             for n in 3..=5 {
                 for win in ends.windows(n + 1) {
                     s.set(&[b"c:", &padded.as_bytes()[win[0]..win[n]]]);
@@ -54,9 +54,14 @@ impl Sparse {
     /// Active buckets in ascending order.
     pub fn iter(&self) -> impl Iterator<Item = u32> + '_ {
         self.bits.iter().enumerate().flat_map(|(i, &word)| {
-            (0..64)
-                .filter(move |b| word >> b & 1 == 1)
-                .map(move |b| (i * 64 + b) as u32)
+            let mut rest = word;
+            std::iter::from_fn(move || {
+                let b = rest.trailing_zeros();
+                (rest != 0).then(|| {
+                    rest &= rest - 1;
+                    (i * 64) as u32 + b
+                })
+            })
         })
     }
 

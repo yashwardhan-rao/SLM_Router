@@ -2,9 +2,11 @@
 
 use serde::{Deserialize, Serialize};
 
+// shortcut: the classifier is unused outside tests until Rule 5 calls it (v0.4.0 step 6)
+#[cfg_attr(not(test), allow(dead_code))]
+mod classifier;
 mod complexity;
 #[cfg_attr(not(test), allow(dead_code))]
-// shortcut: unused until the classifier lands (v0.4.0 step 5)
 mod features;
 #[cfg(test)]
 mod tests;

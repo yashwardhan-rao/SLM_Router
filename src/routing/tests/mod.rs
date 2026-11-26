@@ -7,6 +7,7 @@ fn route(f: &Features, policy: Policy, pin: Option<Target>) -> Result<Decision, 
 fn ok(target: Target, reason: Reason) -> Result<Decision, RouteError> {
     Ok(Decision { target, reason })
 }
+mod classifier;
 mod complexity;
 mod content;
 mod features;
