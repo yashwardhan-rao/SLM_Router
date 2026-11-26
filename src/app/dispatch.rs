@@ -31,6 +31,8 @@ pub struct Job {
     pub feats: Features,
     pub sid: String,
     pub source: SessionSource,
+    /// The router asked for the stream's usage chunk; the client did not, so it is hidden.
+    pub hide_usage: bool,
 }
 
 fn relay(r: Reply) -> Response {
@@ -45,6 +47,7 @@ pub async fn serve(s: Arc<AppState>, headers: &HeaderMap, job: Job) -> Result<Re
         feats,
         sid,
         source,
+        hide_usage,
     } = job;
     let policy = effective_policy(s.cfg.server.policy, headers.get("x-router-policy"))?;
     let started = Instant::now();
@@ -127,6 +130,7 @@ pub async fn serve(s: Arc<AppState>, headers: &HeaderMap, job: Job) -> Result<Re
             head,
             feats.est_prompt_tokens,
             api,
+            hide_usage,
         )),
         Err(e) => {
             rec.status = 502;

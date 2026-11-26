@@ -10,30 +10,66 @@ pub struct SseScan {
     buf: Vec<u8>,
     usage: Option<(u64, u64)>,
     out_chars: usize,
+    /// Drop the usage-only chunk (and its blank line) from what is forwarded.
+    hide_usage: bool,
+    skip_blank: bool,
 }
 
 impl SseScan {
-    /// Feed raw upstream bytes; chunks may split an event anywhere.
-    pub fn feed(&mut self, bytes: &[u8]) {
-        self.buf.extend_from_slice(bytes);
-        while let Some(end) = self.buf.iter().position(|&b| b == b'\n') {
-            let line: Vec<u8> = self.buf.drain(..=end).collect();
-            self.line(&line);
-        }
-        if self.buf.len() > MAX_LINE {
-            self.buf.clear();
+    /// A scan that also filters: `feed` returns the bytes to forward, minus the usage chunk.
+    pub fn hiding_usage() -> Self {
+        Self {
+            hide_usage: true,
+            ..Self::default()
         }
     }
 
-    fn line(&mut self, line: &[u8]) {
+    /// Feed raw upstream bytes; chunks may split an event anywhere. When hiding usage, returns
+    /// the complete lines to forward; otherwise returns nothing and the caller forwards `bytes`.
+    pub fn feed(&mut self, bytes: &[u8]) -> Vec<u8> {
+        self.buf.extend_from_slice(bytes);
+        let mut out = Vec::new();
+        while let Some(end) = self.buf.iter().position(|&b| b == b'\n') {
+            let line: Vec<u8> = self.buf.drain(..=end).collect();
+            let usage_only = self.line(&line);
+            let skip = usage_only || (self.skip_blank && line.trim_ascii().is_empty());
+            self.skip_blank = usage_only;
+            if self.hide_usage && !skip {
+                out.extend_from_slice(&line);
+            }
+        }
+        if self.buf.len() > MAX_LINE {
+            // Not an event we parse; when filtering, the client still gets every byte of it.
+            out.append(&mut self.buf);
+            if !self.hide_usage {
+                out.clear();
+            }
+        }
+        out
+    }
+
+    pub fn filters(&self) -> bool {
+        self.hide_usage
+    }
+
+    /// Bytes still buffered when the stream ends (an unterminated last line), if filtering.
+    pub fn tail(&mut self) -> Vec<u8> {
+        match self.hide_usage {
+            true => std::mem::take(&mut self.buf),
+            false => Vec::new(),
+        }
+    }
+
+    /// Scans one line; true when it is a chat usage-only chunk (`choices: []` plus `usage`).
+    fn line(&mut self, line: &[u8]) -> bool {
         let Ok(text) = std::str::from_utf8(line) else {
-            return;
+            return false;
         };
         let Some(data) = text.trim().strip_prefix("data:") else {
-            return;
+            return false;
         };
         let Ok(v) = serde_json::from_str::<Value>(data.trim()) else {
-            return;
+            return false;
         };
         let u = &v["usage"];
         if let (Some(p), Some(c)) = (u["prompt_tokens"].as_u64(), u["completion_tokens"].as_u64()) {
@@ -52,6 +88,7 @@ impl SseScan {
         if let Some(t) = delta {
             self.out_chars += t.chars().count();
         }
+        v["choices"].as_array().is_some_and(Vec::is_empty) && v["usage"].is_object()
     }
 
     /// (prompt, completion, estimated): the upstream's usage event, else chars / 4.
@@ -64,67 +101,4 @@ impl SseScan {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::SseScan;
-
-    fn scan(chunks: &[&str]) -> SseScan {
-        let mut s = SseScan::default();
-        chunks.iter().for_each(|c| s.feed(c.as_bytes()));
-        s
-    }
-
-    const CREATED: &str = "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"usage\":null}}\n\n";
-    const DELTA: &str = "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"12345678\"}\n\n";
-
-    fn terminal(kind: &str) -> String {
-        format!(
-            "event: response.{kind}\ndata: {{\"type\":\"response.{kind}\",\"response\":{{\"usage\":{{\"input_tokens\":27,\"output_tokens\":3,\"total_tokens\":30}}}}}}\n\n"
-        )
-    }
-
-    #[test]
-    fn responses_usage_comes_from_every_terminal_event_split_or_not() {
-        for kind in ["completed", "incomplete", "failed"] {
-            let t = terminal(kind);
-            let (a, b) = t.split_at(t.len() / 2);
-            assert_eq!(
-                scan(&[CREATED, DELTA, a, b]).tokens(99),
-                (27, 3, false),
-                "{kind}"
-            );
-        }
-    }
-
-    #[test]
-    fn done_sentinel_is_optional() {
-        let t = terminal("completed");
-        assert_eq!(scan(&[DELTA, &t]).tokens(99), (27, 3, false));
-        assert_eq!(
-            scan(&[DELTA, &t, "data: [DONE]\n\n"]).tokens(99),
-            (27, 3, false)
-        );
-    }
-
-    #[test]
-    fn a_null_usage_after_a_real_one_does_not_clobber_it() {
-        assert_eq!(
-            scan(&[&terminal("completed"), CREATED]).tokens(99),
-            (27, 3, false)
-        );
-    }
-
-    #[test]
-    fn deltas_without_a_terminal_event_are_estimated() {
-        assert_eq!(scan(&[CREATED, DELTA, DELTA]).tokens(99), (99, 4, true));
-    }
-
-    #[test]
-    fn chat_usage_still_parses() {
-        let chunks = [
-            "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n",
-            "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":7,\"completion_tokens\":3}}\n\n",
-            "data: [DONE]\n\n",
-        ];
-        assert_eq!(scan(&chunks).tokens(99), (7, 3, false));
-    }
-}
+mod tests;

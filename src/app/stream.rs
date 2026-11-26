@@ -37,6 +37,7 @@ pub fn relay(
     head: StreamHead,
     est_prompt: usize,
     api: Api,
+    hide_usage: bool,
 ) -> Response {
     let (status, ctype) = (head.status, head.content_type.clone());
     (rec.status, rec.ttfb_ms) = (head.status, head.ttfb_ms);
@@ -46,7 +47,11 @@ pub fn relay(
         Api::Responses => INTERRUPTED_RESPONSES,
     };
     tokio::spawn(async move {
-        let (outcome, scan) = pump(head, &tx, interrupted).await;
+        let scan = match hide_usage {
+            true => SseScan::hiding_usage(),
+            false => SseScan::default(),
+        };
+        let (outcome, scan) = pump(head, &tx, interrupted, scan).await;
         let (p, c, est) = scan.tokens(est_prompt);
         rec.outcome = outcome;
         (
@@ -74,8 +79,8 @@ async fn pump(
     head: StreamHead,
     tx: &Sender<Result<Bytes, Infallible>>,
     interrupted: &'static str,
+    mut scan: SseScan,
 ) -> (&'static str, SseScan) {
-    let mut scan = SseScan::default();
     let mut resp = head.resp;
     let mut next = Some(head.first);
     loop {
@@ -88,18 +93,32 @@ async fn pump(
         };
         match chunk {
             Ok(Some(b)) => {
-                scan.feed(&b);
-                if tx.send(Ok(b)).await.is_err() {
+                let kept = scan.feed(&b);
+                // A filtering scan forwards only what it kept; a plain one forwards `b` untouched.
+                let out = if scan.filters() { Bytes::from(kept) } else { b };
+                if !out.is_empty() && tx.send(Ok(out)).await.is_err() {
                     return ("client_disconnect", scan);
                 }
             }
-            Ok(None) => return ("ok", scan),
+            Ok(None) => {
+                send_tail(tx, &mut scan).await;
+                return ("ok", scan);
+            }
             Err(_) => {
+                send_tail(tx, &mut scan).await;
                 let _ = tx
                     .send(Ok(Bytes::from_static(interrupted.as_bytes())))
                     .await;
                 return ("stream_error", scan);
             }
         }
+    }
+}
+
+/// Forward an unterminated last line the filter was still holding.
+async fn send_tail(tx: &Sender<Result<Bytes, Infallible>>, scan: &mut SseScan) {
+    let tail = scan.tail();
+    if !tail.is_empty() {
+        let _ = tx.send(Ok(Bytes::from(tail))).await;
     }
 }

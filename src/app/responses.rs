@@ -42,6 +42,7 @@ pub async fn responses(
         feats,
         sid,
         source,
+        hide_usage: false,
     };
     serve(s, &headers, job).await
 }

@@ -17,11 +17,7 @@ async fn stream_fails_over_to_cloud_when_local_is_down_before_the_first_byte() {
         })
         .await;
         let (status, _, body) = fetch(&r.base, &stream_req(), &[]).await;
-        assert_eq!(
-            (status, body),
-            (200, sse(&[HELLO, USAGE])),
-            "local {local_down}"
-        );
+        assert_eq!((status, body), (200, sse(&[HELLO])), "local {local_down}");
         let l = &log_lines_wait(&r.dir.log(), 1).await[0];
         assert_eq!(
             (l["failed_over"].as_bool(), l["reason"].as_str()),

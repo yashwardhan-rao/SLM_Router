@@ -2,14 +2,15 @@ mod common;
 use common::*;
 
 #[tokio::test]
-async fn local_stream_is_relayed_verbatim_and_usage_is_read_from_the_final_chunk() {
+async fn local_stream_requests_usage_and_hides_the_usage_chunk_the_client_did_not_ask_for() {
     let r = rig(Mode::Sse(&[HELLO, USAGE]), Mode::Ok, |_| {}).await;
     let (status, ctype, body) = fetch(&r.base, &stream_req(), &[]).await;
     assert_eq!(status, 200);
     assert!(ctype.starts_with("text/event-stream"), "{ctype}");
-    assert_eq!(body, sse(&[HELLO, USAGE]));
+    assert_eq!(body, sse(&[HELLO]));
     assert_eq!(r.local.last().body["model"], "llama-test");
     assert_eq!(r.local.last().body["stream"], true);
+    assert_eq!(r.local.last().body["stream_options"]["include_usage"], true);
 
     let l = &log_lines_wait(&r.dir.log(), 1).await[0];
     assert_eq!(
@@ -55,21 +56,18 @@ async fn cloud_stream_uses_the_server_side_key_and_rewritten_model() {
         &[("authorization", "Bearer client")],
     )
     .await;
-    assert_eq!((status, body), (200, sse(&[HELLO, USAGE])));
+    assert_eq!((status, body), (200, sse(&[HELLO])));
+    assert_eq!(r.cloud.last().body["stream_options"]["include_usage"], true);
     assert_eq!(r.cloud.last().auth.as_deref(), Some("Bearer sk-cloud"));
     assert_eq!(r.cloud.last().body["model"], "cloud-test");
     assert_eq!(r.local.count(), 0);
 }
 
 #[tokio::test]
-async fn usage_is_found_even_when_an_event_is_split_across_chunks() {
+async fn usage_is_found_and_hidden_even_when_an_event_is_split_across_chunks() {
     let r = rig(Mode::SseSplit(&[HELLO, USAGE]), Mode::Ok, |_| {}).await;
     let (_, _, body) = fetch(&r.base, &stream_req(), &[]).await;
-    assert_eq!(
-        body,
-        format!("data: {HELLO}\n\ndata: {USAGE}\n\n"),
-        "bytes must pass through unchanged"
-    );
+    assert_eq!(body, format!("data: {HELLO}\n\n"));
     let l = &log_lines_wait(&r.dir.log(), 1).await[0];
     assert_eq!(
         (
@@ -79,4 +77,57 @@ async fn usage_is_found_even_when_an_event_is_split_across_chunks() {
         ),
         (Some(7), Some(3), Some(false))
     );
+}
+
+#[tokio::test]
+async fn a_client_that_asked_for_usage_gets_the_stream_verbatim() {
+    let r = rig(Mode::SseSplit(&[HELLO, USAGE]), Mode::Ok, |_| {}).await;
+    let mut req = stream_req();
+    req["stream_options"] = serde_json::json!({"include_usage": true, "x_extra": 1});
+    let (_, _, body) = fetch(&r.base, &req, &[]).await;
+    assert_eq!(
+        body,
+        format!(
+            "data: {HELLO}
+
+data: {USAGE}
+
+"
+        ),
+        "bytes must pass through unchanged"
+    );
+    assert_eq!(r.local.last().body["stream_options"]["x_extra"], 1);
+}
+
+#[tokio::test]
+async fn other_stream_options_keys_survive_the_usage_request() {
+    let r = rig(Mode::Sse(&[HELLO, USAGE]), Mode::Ok, |_| {}).await;
+    let mut req = stream_req();
+    req["stream_options"] = serde_json::json!({"x_extra": "keep"});
+    let (_, _, body) = fetch(&r.base, &req, &[]).await;
+    assert_eq!(body, sse(&[HELLO]));
+    let sent = r.local.last().body;
+    assert_eq!(sent["stream_options"]["x_extra"], "keep");
+    assert_eq!(sent["stream_options"]["include_usage"], true);
+}
+
+#[tokio::test]
+async fn non_object_stream_options_is_rejected_before_any_upstream_call() {
+    let r = rig(Mode::Sse(&[HELLO, USAGE]), Mode::Ok, |_| {}).await;
+    let mut req = stream_req();
+    req["stream_options"] = serde_json::json!("x");
+    let (status, _, body) = fetch(&r.base, &req, &[]).await;
+    assert_eq!(status, 400, "{body}");
+    assert!(body.contains("stream_options"), "{body}");
+    assert_eq!(r.local.count() + r.cloud.count(), 0);
+}
+
+#[tokio::test]
+async fn failover_to_cloud_also_requests_and_hides_usage() {
+    let r = rig(Mode::Status(503, "{}"), Mode::Sse(&[HELLO, USAGE]), |_| {}).await;
+    let (status, _, body) = fetch(&r.base, &stream_req(), &[]).await;
+    assert_eq!((status, body), (200, sse(&[HELLO])));
+    assert_eq!(r.cloud.last().body["stream_options"]["include_usage"], true);
+    let l = &log_lines_wait(&r.dir.log(), 1).await[0];
+    assert_eq!(l["tokens_estimated"].as_bool(), Some(false));
 }
