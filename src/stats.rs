@@ -14,6 +14,31 @@ struct Rec {
     completion_tokens: u64,
     saved_usd: Option<f64>,
     total_ms: u64,
+    // Defaults keep hand-written or partial lines readable without counting them as errors.
+    #[serde(default = "unknown")]
+    reason: String,
+    #[serde(default = "ok")]
+    outcome: String,
+    #[serde(default)]
+    tokens_estimated: bool,
+}
+
+fn unknown() -> String {
+    "unknown".into()
+}
+
+fn ok() -> String {
+    "ok".into()
+}
+
+/// `name count` pairs, most frequent first, ties by name.
+fn counts<'a>(names: impl Iterator<Item = &'a str>) -> String {
+    let mut m = std::collections::BTreeMap::<&str, usize>::new();
+    names.for_each(|n| *m.entry(n).or_default() += 1);
+    let mut v: Vec<_> = m.into_iter().collect();
+    v.sort_by_key(|a| std::cmp::Reverse(a.1));
+    let parts: Vec<String> = v.iter().map(|(n, c)| format!("{n} {c}")).collect();
+    parts.join(", ")
 }
 
 /// `30s`, `15m`, `24h` or `7d`.
@@ -105,6 +130,25 @@ pub fn report(log: impl BufRead, now_ms: u64, since: Option<Duration>) -> String
         latency(&recs, "local"),
         latency(&recs, "cloud"),
     ];
+    if !recs.is_empty() {
+        out.push(format!(
+            "reasons: {}",
+            counts(recs.iter().map(|r| r.reason.as_str()))
+        ));
+    }
+    let failed = recs.iter().filter(|r| r.outcome != "ok");
+    out.push(match failed.clone().count() {
+        0 => "errors: 0".to_string(),
+        n => format!(
+            "errors: {n} ({})",
+            counts(failed.map(|r| r.outcome.as_str()))
+        ),
+    });
+    let est = recs.iter().filter(|r| r.tokens_estimated).count();
+    out.push(format!(
+        "tokens estimated: {est} of {} requests",
+        recs.len()
+    ));
     if skipped > 0 {
         out.push(format!("skipped unreadable log lines: {skipped}"));
     }

@@ -1,7 +1,10 @@
 #![allow(dead_code)]
 mod fake;
+mod stats;
 mod stream;
 pub use fake::*;
+#[allow(unused_imports)] // only the stats test binaries use these helpers
+pub use stats::*;
 #[allow(unused_imports)] // only the streaming test binaries use these helpers
 pub use stream::*;
 
