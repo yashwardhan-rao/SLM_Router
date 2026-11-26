@@ -7,6 +7,7 @@
 
 Every stage skips ids already written, so it can be stopped and rerun in short batches
 (--limit N). Run `scripts/judge.py --calibrate` with the same judge before `label`.
+`label` grades --judge-batch answers per judge call; ids the judge skips are retried next run.
 Generated prompts that overlap any fixture prompt (word-bigram Jaccard >= 0.5) are dropped.
 """
 import argparse
@@ -88,7 +89,7 @@ def generate(args):
         while len(mine) < 2 * per_domain and calls < args.limit:
             avoid = "; ".join(r["prompt"] for r in mine[-6:]) or "(none yet)"
             reply = judge.ask(args.gen_base, args.gen_model, GEN.format(k=args.batch, domain=domain, avoid=avoid),
-                              args.batch * 120, temperature=0.9)
+                              max(4096, args.batch * 200), args.judge_key, temperature=0.9)
             calls += 1
             kept = 0
             for p_i, pair in enumerate(parse_pairs(reply)):
@@ -106,15 +107,23 @@ def generate(args):
     print(f"{len(rows(PROMPTS))} prompts in {PROMPTS.name}")
 
 
-def stage(args, src, dst, fn):
-    """Apply fn to rows of src whose id is not yet in dst, at most --limit of them."""
+def stage(args, src, dst, fn, size=1):
+    """Apply fn to chunks of rows of src whose id is not yet in dst, at most --limit rows.
+    fn returns output rows; rows it leaves out are retried on the next run."""
     done = {r["id"] for r in rows(dst)}
     todo = [r for r in rows(src) if r["id"] not in done][:args.limit]
-    for n, r in enumerate(todo, 1):
-        out = fn(r)
-        append(dst, out)
-        print(f"{n}/{len(todo)} {r['id']} {out.get('label', '')}", flush=True)
-    print(f"{len(done) + len(todo)} rows in {dst.name}")
+    n = 0
+    for part in judge.chunks(todo, size):
+        for out in fn(part):
+            append(dst, out)
+            n += 1
+            print(f"{n}/{len(todo)} {out['id']} {out.get('label', '')}", flush=True)
+    print(f"{len(done) + n} rows in {dst.name}")
+
+
+def label(args, part, prompts):
+    got = judge.grade_batch(args, [(prompts[r["id"]], r["answer"]) for r in part])
+    return [{"id": r["id"], "label": got[i], "judge": args.judge_model} for i, r in enumerate(part) if i in got]
 
 
 def main():
@@ -124,18 +133,17 @@ def main():
     ap.add_argument("--gen-base", default=judge.OLLAMA)
     ap.add_argument("--gen-model", default="qwen2.5-coder:7b")
     ap.add_argument("--pairs", type=int, default=750, help="total easy/hard pairs (default: %(default)s)")
-    ap.add_argument("--batch", type=int, default=8, help="pairs per generator call")
+    ap.add_argument("--batch", type=int, default=16, help="pairs per generator call")
     ap.add_argument("--limit", type=int, default=10**9, help="max calls or rows this run")
     args = ap.parse_args()
+    judge.PACE[0] = args.pace
     if args.stage == "generate":
         generate(args)
     elif args.stage == "answer":
-        stage(args, PROMPTS, ANSWERS, lambda r: {"id": r["id"], "answer": judge.answer(args, r["prompt"])})
+        stage(args, PROMPTS, ANSWERS, lambda p: [{"id": r["id"], "answer": judge.answer(args, r["prompt"])} for r in p])
     else:
         prompts = {r["id"]: r["prompt"] for r in rows(PROMPTS)}
-        stage(args, ANSWERS, LABELS,
-              lambda r: {"id": r["id"], "label": judge.grade(args, prompts[r["id"]], r["answer"]),
-                         "judge": args.judge_model})
+        stage(args, ANSWERS, LABELS, lambda p: label(args, p, prompts), args.judge_batch)
 
 
 def self_check():
