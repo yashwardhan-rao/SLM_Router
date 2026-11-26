@@ -12,7 +12,7 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 
 1. As an app developer, I want to point my existing OpenAI SDK at the router by changing only `base_url`, so that I adopt it without code changes.
 2. As an app developer, I want unknown request fields passed through to the upstream untouched, so that new OpenAI parameters keep working.
-3. As an app developer, I want streaming (`stream: true`) responses relayed as-is, so that chat UIs and IDEs feel responsive.
+3. As an app developer, I want streaming (`stream: true`) responses relayed as-is, so that chat UIs and IDEs feel responsive. (Since v0.5.0 the one exception is the usage chunk the router requests for itself, hidden from clients that did not ask for it.)
 4. As an app developer, I want non-streaming responses to work identically to streaming ones in routing and logging, so that I can choose either.
 5. As an app developer, I want `/v1/models` to list `slm-router/auto`, `slm-router/local` and `slm-router/cloud`, so that SDKs and model pickers discover the router.
 6. As an app developer, I want to force a target by setting `model` to `slm-router/local` or `slm-router/cloud`, so that I can override routing per request.
@@ -118,6 +118,7 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 
 **Streaming**
 - Server-sent events are relayed as received for both targets. Token counts come from the final usage chunk, or the local estimate (flagged) if the provider omits it.
+- Streamed chat requests get `stream_options.include_usage: true` (other `stream_options` keys are kept), so the upstream sends a usage chunk. If the client did not set it, that `choices: []` chunk and its blank line are dropped from the relayed stream; no other byte is changed. A `stream_options` that is not an object or null is rejected with 400. `/v1/responses` streams already carry usage and are untouched.
 
 **Security**
 - Binds to loopback by default. Binding elsewhere is an explicit flag and requires `ROUTER_API_KEY`, otherwise startup fails.
@@ -129,7 +130,7 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 - `--warmup` sends one tiny request to the local model at startup.
 
 **Logging and stats**
-- Append-only JSONL, one line per request, schema version 1. Fields: timestamp, request id, session id, session source, policy, target, reason, failed-over flag, pinned flag, stream flag, returned status, outcome (ok, upstream_error, client_disconnect, stream_error), TTFB ms, total ms, prompt tokens, completion tokens, tokens-estimated flag, saved USD.
+- Append-only JSONL, one line per request, schema version 1. Fields: timestamp, request id, session id, session source, policy, target, reason, failed-over flag, pinned flag, stream flag, returned status, outcome (ok, upstream_error, client_disconnect, stream_error), TTFB ms, total ms, prompt tokens, completion tokens, tokens-estimated flag, saved USD, and (additive, still version 1) the Rule 5 classifier score for the last user message to 3 decimals, null when the classifier is disabled or the prompt is over `complex_prompt_tokens` (rule 5 never scores those).
 - Saved USD is the counterfactual cloud cost for requests served locally, using optional configured cloud input/output prices per million tokens. Local cost is treated as zero (electricity and hardware ignored). Null when pricing is absent; cloud-served requests save zero.
 - Metadata only. Never prompt or completion text, never keys. A write failure warns on stderr and never fails the request. No rotation in v1.
 - `stats` aggregates the file: counts by target, failovers, percent local, tokens kept local, total saved, p50/p95 latency per target, with an optional `--since` window.

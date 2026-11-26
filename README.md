@@ -16,7 +16,7 @@ Developers who run a local model and also pay for a cloud model tend to send eve
 - **One static binary, no runtime.** `cargo build --release` produces a single ~7.7 MB executable (Linux and Windows builds are attached to each release). No Python environment, database, UI or background service to run alongside it.
 - **Routing inside the request path, with no I/O.** `decide()` is a pure function. The Rule 5 classifier is a 64 KB int8 model embedded in the binary and scores a 2 KB prompt in under 50 µs, a budget enforced by a release-mode test.
 - **Session pinning keeps caches warm.** A conversation stays on its target, and a pin only ever escalates local to cloud, so a session never falls back to a cold local cache or silently downgrades in quality.
-- **No translation layer.** Ollama and the cloud both speak OpenAI-compatible `/v1`, so the body is forwarded as received and unknown fields pass through untouched. Clients change only `base_url`.
+- **No translation layer.** Ollama and the cloud both speak OpenAI-compatible `/v1`, so the body is forwarded as received and unknown fields pass through untouched. The one addition: streamed chat requests ask for `stream_options.include_usage`, so token counts are exact, and the extra usage chunk is hidden from clients that did not ask for it. Clients change only `base_url`.
 
 ## Architecture
 
@@ -39,7 +39,7 @@ flowchart TD
     T --> LO
     T --> CL
     LO["Local: Ollama /v1"] --> B{"Circuit breaker open, or<br/>refused / 5xx / no first byte?"}
-    B -- "no" --> OK["Response relayed<br/>(streamed as received)"]
+    B -- "no" --> OK["Response relayed<br/>(streamed as received,<br/>usage chunk hidden unless requested)"]
     B -- "yes, auto policy<br/>local_unavailable · circuit_open" --> CL
     B -- "yes, forced local or local-only" --> E["503, OpenAI error body"]
     CL["Cloud: OpenAI-compatible /v1"] --> OK
@@ -136,6 +136,10 @@ One `scripts/eval.py` run on the release binary, with `llama3.2:1b` as local and
 
 Why the dollars did not move: most of the raw saving the keyword router appeared to make came from hard prompts wrongly kept on the 1B model. Once those misroutes are charged back at cloud price, savings are flat (0.101 vs 0.100), and 22 fewer hard prompts get a 1B answer. The gain is quality, not cost. The failover drill is unchanged: from the third request onward, a dead local fails over in about 100 to 160 ms.
 
+### v0.5.0: exact token counts on streams
+
+One live run of the release binary against Ollama 0.40.18 (`llama3.2:1b` local, `qwen2.5-coder:7b` standing in for cloud): 4 requests, 3 of them streamed, all with `tokens_estimated: false`. Before v0.5.0 every streamed request was estimated, because neither Ollama nor OpenAI send usage on a stream unless asked. Clients that did not set `include_usage` received no `choices: []` chunk. A CUDA prompt with no cue words went to cloud with `classifier_score` 0.942; "hi" scored 0.339.
+
 ### v1 local benchmark
 
 One run of `python scripts/bench.py --skip-complex` against a release build (`serve --warmup`, auto policy). Numbers are from `slm-router stats` and the request log.
@@ -176,13 +180,14 @@ Copy [`slm-router.example.toml`](slm-router.example.toml) to `slm-router.toml`; 
 | `routing.reasoning_cues`, `routing.hint_cues` | built-in lists | Override the keyword cues. |
 | `pricing.input_per_mtok`, `pricing.output_per_mtok` | unset | Cloud prices for `saved_usd`; without them it is `null`. |
 | `session.ttl_secs`, `session.max_pins` | 300, 10000 | Pin idle TTL (match `OLLAMA_KEEP_ALIVE`) and LRU bound. |
-| `log.path` | `slm-router.jsonl` | Append-only, metadata-only request log. No rotation. |
+| `log.path` | `slm-router.jsonl` | Append-only, metadata-only request log. No rotation. Each line also carries `classifier_score`, the Rule 5 probability (null when the classifier is disabled or the prompt is over `complex_prompt_tokens`), for tuning `classifier_threshold` on real traffic. |
 
 **Commands**
 
 ```sh
 slm-router serve [--config FILE] [--bind ADDR] [--warmup]   # run the proxy
-slm-router stats [--config FILE] [--since 24h]              # counts, % local, tokens kept local, saved USD, p50/p95
+slm-router stats [--config FILE] [--since 24h]              # counts, % local, tokens kept local, saved USD, p50/p95,
+                                                            # routing reasons, errors, requests with estimated tokens
 
 python scripts/eval.py --log slm-router.jsonl               # live routing eval against a running router
 python scripts/eval.py --log slm-router.jsonl \
@@ -261,7 +266,7 @@ tests/                   integration tests against fake upstreams, eval and pari
 
 ## Roadmap
 
-Shipped versions are ticked below. The full release history is in [CHANGELOG.md](CHANGELOG.md).
+Completed work is ticked below. The full release history is in [CHANGELOG.md](CHANGELOG.md).
 
 - [x] Pure routing core (`decide()`) with unit tests
 - [x] axum gateway: `/v1/chat/completions` (streaming and non-streaming), `/v1/models`
@@ -271,6 +276,7 @@ Shipped versions are ticked below. The full release history is in [CHANGELOG.md]
 - [x] v0.2.0: `/v1/responses` passthrough (streaming, stateful-to-cloud routing)
 - [x] v0.3.0: density token estimate, Rule 5 scoring, reply reserve, local circuit breaker
 - [x] v0.4.0: embedded Rule 5 classifier trained on judged synthetic prompts
+- [x] v0.5.0: exact streaming token counts, `classifier_score` in the log, `stats` by reason and outcome
 
 **Where 1.0 is headed.** One binary. Point your OpenAI SDK at it. It answers easy prompts with your local model, sends hard ones to the cheapest cloud model that can handle them, never lets private prompts leave your machine, and shows how much you saved.
 
