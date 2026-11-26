@@ -184,4 +184,13 @@ fn the_logged_classifier_score_is_the_one_rule5_compared() {
         ..Default::default()
     };
     assert_eq!(classifier_score(&text(CUDA), &off), None);
+    let long = Features {
+        est_prompt_tokens: cfg.complex_prompt_tokens + 1,
+        ..text(CUDA)
+    };
+    assert_eq!(
+        classifier_score(&long, &cfg),
+        None,
+        "rule 5 never scores it"
+    );
 }

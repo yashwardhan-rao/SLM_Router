@@ -134,7 +134,12 @@ pub fn decide(
 
 /// The Rule 5 classifier's probability for the last user message, logged so the threshold can be
 /// tuned on real traffic. The same inputs as rule 5, so it is the score rule 5 compared.
+/// None for prompts long enough that rule 5 never runs the classifier, which also keeps a huge
+/// paste from paying for it.
 pub fn classifier_score(f: &Features, cfg: &RoutingConfig) -> Option<f32> {
+    if f.est_prompt_tokens > cfg.complex_prompt_tokens {
+        return None;
+    }
     complexity::score_of(&f.last_user_text, cfg)
 }
 

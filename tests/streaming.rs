@@ -131,3 +131,18 @@ async fn failover_to_cloud_also_requests_and_hides_usage() {
     let l = &log_lines_wait(&r.dir.log(), 1).await[0];
     assert_eq!(l["tokens_estimated"].as_bool(), Some(false));
 }
+
+#[tokio::test]
+async fn include_usage_false_or_null_options_still_get_exact_counts_and_no_usage_chunk() {
+    for opts in [
+        serde_json::json!({"include_usage": false}),
+        serde_json::json!(null),
+    ] {
+        let r = rig(Mode::Sse(&[HELLO, USAGE]), Mode::Ok, |_| {}).await;
+        let mut req = stream_req();
+        req["stream_options"] = opts.clone();
+        let (status, _, body) = fetch(&r.base, &req, &[]).await;
+        assert_eq!((status, body), (200, sse(&[HELLO])), "{opts}");
+        assert_eq!(r.local.last().body["stream_options"]["include_usage"], true);
+    }
+}
