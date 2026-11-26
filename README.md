@@ -119,4 +119,4 @@ Read it with care: it is one run on one machine with a 1B model. The cache figur
 - [x] v0.3.0: density token estimate, Rule 5 scoring, reply reserve, local circuit breaker
 - [x] v0.4.0: embedded Rule 5 classifier trained on judged synthetic prompts
 - [ ] Next: observability (routing metrics from the log), extra tiers
-- [ ] Post-v1: ONNX classifier if the linear one plateaus, semantic cache, speculative verification, extra tiers
+- [ ] Post-v1: ONNX classifier if the linear one plateaus, semantic cache, speculative verification
