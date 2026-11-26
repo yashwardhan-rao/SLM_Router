@@ -23,6 +23,9 @@ policy = "auto"
 
 # Largest request body in bytes. Requests with base64 images can be several MB. Default: 64 MiB.
 max_body_bytes = 67108864
+# Ask upstreams for a usage chunk on streamed chat requests so token counts are exact; the chunk
+# is hidden from clients that did not ask for it. Set false if an upstream rejects stream_options.
+request_stream_usage = true
 
 [local]
 # Any OpenAI-compatible endpoint. Ollama serves one under /v1.

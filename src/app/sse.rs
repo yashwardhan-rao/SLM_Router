@@ -53,9 +53,12 @@ impl SseScan {
     }
 
     /// Bytes still buffered when the stream ends (an unterminated last line), if filtering.
+    /// It is scanned too, so a usage chunk without a final newline is still counted and hidden.
     pub fn tail(&mut self) -> Vec<u8> {
-        match self.hide_usage {
-            true => std::mem::take(&mut self.buf),
+        let last = std::mem::take(&mut self.buf);
+        let usage_only = self.line(&last);
+        match self.hide_usage && !usage_only {
+            true => last,
             false => Vec::new(),
         }
     }

@@ -118,7 +118,7 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 
 **Streaming**
 - Server-sent events are relayed as received for both targets. Token counts come from the final usage chunk, or the local estimate (flagged) if the provider omits it.
-- Streamed chat requests get `stream_options.include_usage: true` (other `stream_options` keys are kept), so the upstream sends a usage chunk. If the client did not set it, that `choices: []` chunk and its blank line are dropped from the relayed stream; no other byte is changed. A `stream_options` that is not an object or null is rejected with 400. `/v1/responses` streams already carry usage and are untouched.
+- Streamed chat requests get `stream_options.include_usage: true` (other `stream_options` keys are kept), so the upstream sends a usage chunk. If the client did not set it, that `choices: []` chunk and its blank line are dropped from the relayed stream; no other byte is changed. On a streamed request, a `stream_options` that is not an object or null is rejected with 400; non-streamed bodies are forwarded as received. `server.request_stream_usage = false` turns all of this off. `/v1/responses` streams already carry usage and are untouched.
 
 **Security**
 - Binds to loopback by default. Binding elsewhere is an explicit flag and requires `ROUTER_API_KEY`, otherwise startup fails.

@@ -8,8 +8,9 @@ Notable changes to SLM_Router. The format follows [Keep a Changelog](https://kee
 
 ### Added
 - `classifier_score` in every log line: the Rule 5 classifier's probability for the last user message (3 decimals, `null` when the classifier is disabled or the prompt is long enough that rule 5 skips it), so `classifier_threshold` can be tuned on real traffic.
-- `stats` reports routing reasons by count, errors by outcome, and how many requests have estimated token counts.
-- `400 invalid_request_error` when `stream_options` is not an object.
+- `stats` reports routing reasons by count, errors by outcome (client disconnects on their own line), and how many requests have estimated token counts.
+- `400 invalid_request_error` when a streamed chat request's `stream_options` is not an object.
+- `server.request_stream_usage` (default `true`) to turn the usage request off for an upstream that rejects `stream_options`.
 
 ### Changed
 - Streamed chat requests are sent with `stream_options.include_usage: true`, so token counts and `saved_usd` are exact instead of estimated. The extra usage chunk is hidden from clients that did not ask for it; clients that asked get the stream unchanged.

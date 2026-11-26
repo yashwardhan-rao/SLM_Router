@@ -136,7 +136,10 @@ pub fn report(log: impl BufRead, now_ms: u64, since: Option<Duration>) -> String
             counts(recs.iter().map(|r| r.reason.as_str()))
         ));
     }
-    let failed = recs.iter().filter(|r| r.outcome != "ok");
+    // A client hanging up is not the router's or upstream's failure; it gets its own line.
+    let failed = recs
+        .iter()
+        .filter(|r| r.outcome != "ok" && r.outcome != "client_disconnect");
     out.push(match failed.clone().count() {
         0 => "errors: 0".to_string(),
         n => format!(
@@ -144,6 +147,8 @@ pub fn report(log: impl BufRead, now_ms: u64, since: Option<Duration>) -> String
             counts(failed.map(|r| r.outcome.as_str()))
         ),
     });
+    let gone = recs.iter().filter(|r| r.outcome == "client_disconnect");
+    out.push(format!("client disconnects: {}", gone.count()));
     let est = recs.iter().filter(|r| r.tokens_estimated).count();
     out.push(format!(
         "tokens estimated: {est} of {} requests",

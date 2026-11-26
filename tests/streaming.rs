@@ -146,3 +146,21 @@ async fn include_usage_false_or_null_options_still_get_exact_counts_and_no_usage
         assert_eq!(r.local.last().body["stream_options"]["include_usage"], true);
     }
 }
+
+#[tokio::test]
+async fn the_usage_request_can_be_switched_off_and_non_streams_are_untouched() {
+    let r = rig(Mode::Sse(&[HELLO, USAGE]), Mode::Ok, |c| {
+        c.server.request_stream_usage = false
+    })
+    .await;
+    let (_, _, body) = fetch(&r.base, &stream_req(), &[]).await;
+    assert_eq!(body, sse(&[HELLO, USAGE]), "relayed as received when off");
+    assert!(r.local.last().body.get("stream_options").is_none());
+
+    let on = rig(Mode::Ok, Mode::Ok, |_| {}).await;
+    let mut req = user("hi");
+    req["stream_options"] = serde_json::json!("x");
+    let (status, _) = post_chat(&on.base, &req, &[]).await;
+    assert_eq!(status, 200, "a non-stream body passes through as received");
+    assert_eq!(on.local.last().body["stream_options"], "x");
+}

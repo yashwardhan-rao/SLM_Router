@@ -108,3 +108,11 @@ fn a_plain_scan_forwards_nothing_itself() {
     assert!(s.feed(CHAT_USAGE.as_bytes()).is_empty());
     assert!(s.tail().is_empty());
 }
+
+#[test]
+fn a_usage_chunk_without_a_final_newline_is_still_hidden_and_counted() {
+    let last = CHAT_USAGE.trim_end();
+    let (out, s) = filtered(&[CHAT_DELTA.as_bytes(), last.as_bytes()]);
+    assert_eq!(out, CHAT_DELTA.as_bytes());
+    assert_eq!(s.tokens(99), (7, 3, false));
+}

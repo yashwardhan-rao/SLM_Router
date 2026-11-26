@@ -34,7 +34,7 @@ pub async fn chat(
     let (sid, source) = session_id(hdr, &req);
     // Typed parse validates the shape; re-serialising keeps unknown fields via `extra`.
     let mut body = serde_json::to_value(&req).expect("a parsed ChatRequest serialises");
-    let hide_usage = request_usage(&mut body)?;
+    let hide_usage = s.cfg.server.request_stream_usage && request_usage(&mut body)?;
     let job = Job {
         api: Api::Chat,
         body,
@@ -48,13 +48,16 @@ pub async fn chat(
 
 /// Ask a streaming upstream for its usage chunk, so token counts are exact rather than estimated.
 /// Returns true when the client did not ask for that chunk itself and it must be hidden from it.
-// shortcut: always on; add a config switch if a cloud ever rejects `stream_options`.
+/// Non-streaming bodies are left untouched, whatever their `stream_options`.
 fn request_usage(body: &mut Value) -> Result<bool, ApiError> {
+    if body["stream"] != true {
+        return Ok(false);
+    }
     let opts = &body["stream_options"];
     if !(opts.is_null() || opts.is_object()) {
         return Err(ApiError::bad_request("stream_options must be an object"));
     }
-    if body["stream"] != true || opts["include_usage"] == true {
+    if opts["include_usage"] == true {
         return Ok(false);
     }
     body["stream_options"]["include_usage"] = Value::Bool(true);

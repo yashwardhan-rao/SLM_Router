@@ -27,6 +27,9 @@ pub struct ServerCfg {
     pub policy: Policy,
     /// Largest accepted request body. Base64 images make bodies big, so the default is generous.
     pub max_body_bytes: usize,
+    /// Add `stream_options.include_usage` to streamed chat requests so token counts are exact.
+    /// Turn off for an upstream that rejects `stream_options`.
+    pub request_stream_usage: bool,
     /// From `ROUTER_API_KEY`; clients must send it as a bearer token when set.
     #[serde(skip)]
     pub api_key: Option<String>,
@@ -38,6 +41,7 @@ impl Default for ServerCfg {
             bind: "127.0.0.1:8080".into(),
             policy: Policy::Auto,
             max_body_bytes: 64 * 1024 * 1024,
+            request_stream_usage: true,
             api_key: None,
         }
     }

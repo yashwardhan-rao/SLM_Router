@@ -26,7 +26,8 @@ fn report_explains_why_requests_were_routed_and_how_many_failed() {
         &text,
         &[
             "reasons: default 3, classifier 2, complexity 1",
-            "errors: 3 (upstream_error 2, client_disconnect 1)",
+            "errors: 2 (upstream_error 2)",
+            "client disconnects: 1",
             "tokens estimated: 2 of 6 requests",
         ],
     );
@@ -41,6 +42,7 @@ fn lines_without_reason_or_outcome_are_not_counted_as_errors() {
         &[
             "reasons: unknown 1",
             "errors: 0",
+            "client disconnects: 0",
             "tokens estimated: 0 of 1 requests",
         ],
     );

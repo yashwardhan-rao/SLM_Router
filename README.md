@@ -167,6 +167,7 @@ Copy [`slm-router.example.toml`](slm-router.example.toml) to `slm-router.toml`; 
 | `server.bind` | `127.0.0.1:8080` | Listen address. Non-loopback requires `ROUTER_API_KEY`. |
 | `server.policy` | `auto` | `auto`, `local-only` or `cloud-only`. |
 | `server.max_body_bytes` | 64 MiB | Largest request body. |
+| `server.request_stream_usage` | `true` | Ask for exact token usage on streamed chat requests (hidden from clients that did not ask). Turn off if an upstream rejects `stream_options`. |
 | `local.base_url`, `local.model` | Ollama `/v1`, `llama3.2` | Local target. |
 | `local.first_byte_timeout_ms` | 15000 | Wait before failing over; keep it above a cold model load. |
 | `local.breaker_failures`, `local.breaker_cooldown_ms` | 2, 30000 | Circuit breaker. `0` disables it. |
@@ -187,7 +188,7 @@ Copy [`slm-router.example.toml`](slm-router.example.toml) to `slm-router.toml`; 
 ```sh
 slm-router serve [--config FILE] [--bind ADDR] [--warmup]   # run the proxy
 slm-router stats [--config FILE] [--since 24h]              # counts, % local, tokens kept local, saved USD, p50/p95,
-                                                            # routing reasons, errors, requests with estimated tokens
+                                                            # routing reasons, errors, client disconnects, estimated tokens
 
 python scripts/eval.py --log slm-router.jsonl               # live routing eval against a running router
 python scripts/eval.py --log slm-router.jsonl \
