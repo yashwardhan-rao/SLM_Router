@@ -82,6 +82,25 @@ fn empty_secret_env_vars_count_as_unset() {
 }
 
 #[test]
+fn classifier_threshold_defaults_to_a_probability_and_is_validated() {
+    let mut c = Config::from_toml(MINIMAL).unwrap();
+    let t = c.routing.classifier_threshold;
+    assert!(t > 0.0 && t <= 1.0, "calibrated default {t}");
+    let off = format!("[routing]\nclassifier_threshold = 1.5\n{MINIMAL}");
+    assert_eq!(
+        Config::from_toml(&off)
+            .unwrap()
+            .routing
+            .classifier_threshold,
+        1.5
+    );
+    for bad in [0.0, -0.5, f32::NAN] {
+        c.routing.classifier_threshold = bad;
+        assert!(c.validate().is_err(), "{bad} must be rejected");
+    }
+}
+
+#[test]
 fn the_documented_example_config_parses_and_validates() {
     let c = Config::from_toml(include_str!("../slm-router.example.toml")).unwrap();
     assert!(c.validate().is_ok());

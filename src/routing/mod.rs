@@ -2,11 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
-// shortcut: the classifier is unused outside tests until Rule 5 calls it (v0.4.0 step 6)
-#[cfg_attr(not(test), allow(dead_code))]
 mod classifier;
 mod complexity;
-#[cfg_attr(not(test), allow(dead_code))]
 mod features;
 #[cfg(test)]
 mod tests;
@@ -52,6 +49,7 @@ pub enum Reason {
     Capability,
     Context,
     Complexity,
+    Classifier,
     Default,
 }
 
@@ -104,10 +102,8 @@ fn auto_route(f: &Features, cfg: &RoutingConfig) -> Decision {
     if over_context(f, cfg) {
         return dec(Target::Cloud, Reason::Context);
     }
-    if f.est_prompt_tokens > cfg.complex_prompt_tokens
-        || complexity::score(&f.last_user_text, cfg) >= cfg.complexity_threshold
-    {
-        return dec(Target::Cloud, Reason::Complexity);
+    if let Some(reason) = complexity::rule5(&f.last_user_text, f.est_prompt_tokens, cfg) {
+        return dec(Target::Cloud, reason);
     }
     dec(Target::Local, Reason::Default)
 }

@@ -5,12 +5,17 @@ fn s(text: &str) -> u32 {
     score(text, &RoutingConfig::default())
 }
 
+/// Keyword cues alone: the classifier is disabled so these tests pin the cue scoring.
 fn routed(text: &str) -> Result<Decision, RouteError> {
     let f = Features {
         last_user_text: text.into(),
         ..Default::default()
     };
-    route(&f, Policy::Auto, None)
+    let cfg = RoutingConfig {
+        classifier_threshold: 2.0,
+        ..Default::default()
+    };
+    decide(&f, &cfg, Policy::Auto, None)
 }
 
 #[test]

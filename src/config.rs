@@ -155,6 +155,10 @@ impl Config {
         if self.session.ttl_secs == 0 || self.session.max_pins == 0 {
             return Err("session.ttl_secs and session.max_pins must be > 0".into());
         }
+        let t = self.routing.classifier_threshold;
+        if !(t.is_finite() && t > 0.0) {
+            return Err("routing.classifier_threshold must be > 0 (above 1 disables it)".into());
+        }
         Ok(())
     }
 }

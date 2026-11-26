@@ -119,3 +119,55 @@ fn rule5_long_message_without_cue_stays_local() {
         ok(Target::Local, Reason::Default)
     );
 }
+
+const CUDA: &str = "Explain how CUDA warp divergence affects kernel throughput.";
+
+fn text(t: &str) -> Features {
+    Features {
+        last_user_text: t.into(),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn rule5_classifier_catches_a_hard_prompt_without_a_cue() {
+    assert!(crate::routing::complexity::score(CUDA, &RoutingConfig::default()) < 2);
+    assert_eq!(
+        route(&text(CUDA), Policy::Auto, None),
+        ok(Target::Cloud, Reason::Classifier)
+    );
+}
+
+#[test]
+fn rule5_classifier_threshold_above_one_disables_it() {
+    let cfg = RoutingConfig {
+        classifier_threshold: 1.01,
+        ..Default::default()
+    };
+    assert_eq!(
+        decide(&text(CUDA), &cfg, Policy::Auto, None),
+        ok(Target::Local, Reason::Default)
+    );
+}
+
+#[test]
+fn rule5_cue_hit_still_reports_complexity() {
+    assert_eq!(
+        route(&text("Prove that CUDA warps diverge."), Policy::Auto, None),
+        ok(Target::Cloud, Reason::Complexity)
+    );
+}
+
+/// The classifier sees the last message's size, not the conversation's: a short follow-up in a
+/// long chat must not look hard just because the history is long.
+#[test]
+fn rule5_short_follow_up_in_a_long_chat_stays_local() {
+    let f = Features {
+        est_prompt_tokens: 1200,
+        ..text("thanks, that worked")
+    };
+    assert_eq!(
+        route(&f, Policy::Auto, None),
+        ok(Target::Local, Reason::Default)
+    );
+}

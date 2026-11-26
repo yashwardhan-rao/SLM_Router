@@ -1,6 +1,8 @@
-//! Rule 5 scoring: reasoning cues, debugging hints, code and big-O in the last user message.
+//! Rule 5: prompt length, keyword cues (reasoning, debugging hints, code, big-O) and the classifier.
 
 use serde::Deserialize;
+
+use super::{Reason, classifier};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -16,6 +18,8 @@ pub struct RoutingConfig {
     pub hint_cues: Vec<String>,
     /// Score at which rule 5 sends the request to the cloud.
     pub complexity_threshold: u32,
+    /// Classifier probability at which rule 5 sends the request to the cloud; above 1.0 disables it.
+    pub classifier_threshold: f32,
 }
 
 const REASONING: &str = "prove, show that, derive, justify, step by step, analyze, analyse,     refactor, trade off, counterexample, induction";
@@ -37,6 +41,7 @@ impl Default for RoutingConfig {
             reasoning_cues: list(REASONING),
             hint_cues: list(HINTS),
             complexity_threshold: 2,
+            classifier_threshold: classifier::model().threshold,
         }
     }
 }
@@ -93,10 +98,31 @@ pub(super) fn is_code(text: &str) -> bool {
     text.contains('`') || markers >= 2
 }
 
+/// Keyword cue score as rule 5 gates it: 0 for a message no longer than `cue_min_chars`.
+#[cfg(test)]
 pub fn score(text: &str, cfg: &RoutingConfig) -> u32 {
     if text.chars().count() <= cfg.cue_min_chars {
         return 0;
     }
+    raw_score(text, cfg)
+}
+
+/// Rule 5: a long prompt or a keyword cue gives `Complexity`; failing that, the classifier gives
+/// `Classifier`. `cue_min_chars` gates keyword cues only.
+pub(super) fn rule5(text: &str, est_prompt_tokens: usize, cfg: &RoutingConfig) -> Option<Reason> {
+    let cue = raw_score(text, cfg);
+    let cued = text.chars().count() > cfg.cue_min_chars && cue >= cfg.complexity_threshold;
+    if est_prompt_tokens > cfg.complex_prompt_tokens || cued {
+        return Some(Reason::Complexity);
+    }
+    // Trained on single messages: it sees the last message's tokens, not the whole conversation's.
+    let tokens = crate::tokens::estimate(text) + 4;
+    (cfg.classifier_threshold <= 1.0
+        && classifier::prob(text, tokens, cue) >= cfg.classifier_threshold)
+        .then_some(Reason::Classifier)
+}
+
+fn raw_score(text: &str, cfg: &RoutingConfig) -> u32 {
     let ws = words(text);
     let reasoning = cfg.reasoning_cues.iter().any(|c| has_cue(&ws, c));
     let hints = cfg.hint_cues.iter().filter(|c| has_cue(&ws, c)).count();

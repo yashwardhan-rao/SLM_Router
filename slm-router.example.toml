@@ -54,7 +54,8 @@ api_key_env = "OPENAI_API_KEY"
 #   3. images, tools, tool_choice or a JSON-schema response_format -> cloud
 #   4. prompt longer than local_max_context_tokens minus 512 reserved for the reply -> cloud
 #   5. prompt longer than complex_prompt_tokens, or a last user message scoring at least
-#      complexity_threshold -> cloud
+#      complexity_threshold (reason `complexity`), or the classifier's probability at least
+#      classifier_threshold (reason `classifier`) -> cloud
 #   6. otherwise local
 # Token counts are estimated from symbol density (letter runs, digit runs, symbols).
 
@@ -68,8 +69,12 @@ complex_prompt_tokens = 1500
 # Cues match whole words, case-insensitively; "lock-free" matches "lock free", and a cue's last word
 # may take a plural "s". Leave reasoning_cues and hint_cues out to keep the built-in lists.
 complexity_threshold = 2
-# Cues only count in a last user message longer than this many characters.
+# Keyword cues only count in a last user message longer than this many characters.
 cue_min_chars = 0
+# Rule 5 classifier: a small model embedded in the binary that scores the last user message.
+# Requests at or above this probability go to cloud. Leave it out to use the value calibrated
+# with the model; any value above 1.0 turns the classifier off.
+# classifier_threshold = 0.78
 # reasoning_cues = ["prove", "show that", "derive", "justify", "step by step", "analyze", "refactor", "trade off"]
 # hint_cues = ["bug", "debug", "fix", "compile", "race condition", "deadlock", "design", "why", "compare"]
 
