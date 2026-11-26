@@ -132,6 +132,12 @@ pub fn decide(
     }
 }
 
+/// The Rule 5 classifier's probability for the last user message, logged so the threshold can be
+/// tuned on real traffic. The same inputs as rule 5, so it is the score rule 5 compared.
+pub fn classifier_score(f: &Features, cfg: &RoutingConfig) -> Option<f32> {
+    complexity::score_of(&f.last_user_text, cfg)
+}
+
 /// Rule 2: a pin sticks; only local -> cloud escalation may change it.
 fn apply_pin(pin: Option<Target>, auto: Decision) -> Decision {
     match pin {

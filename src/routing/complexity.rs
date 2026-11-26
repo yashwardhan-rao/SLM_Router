@@ -115,11 +115,21 @@ pub(super) fn rule5(text: &str, est_prompt_tokens: usize, cfg: &RoutingConfig) -
     if est_prompt_tokens > cfg.complex_prompt_tokens || cued {
         return Some(Reason::Complexity);
     }
+    classifier_prob(text, cue, cfg)
+        .is_some_and(|p| p >= cfg.classifier_threshold)
+        .then_some(Reason::Classifier)
+}
+
+/// The classifier's probability for `text`, or None when it is disabled (threshold above 1).
+pub(super) fn classifier_prob(text: &str, cue: u32, cfg: &RoutingConfig) -> Option<f32> {
     // Trained on single messages: it sees the last message's tokens, not the whole conversation's.
     let tokens = crate::tokens::estimate(text) + 4;
-    (cfg.classifier_threshold <= 1.0
-        && classifier::prob(text, tokens, cue) >= cfg.classifier_threshold)
-        .then_some(Reason::Classifier)
+    (cfg.classifier_threshold <= 1.0).then(|| classifier::prob(text, tokens, cue))
+}
+
+/// What the classifier scores this message, whichever rule decided the route.
+pub(super) fn score_of(text: &str, cfg: &RoutingConfig) -> Option<f32> {
+    classifier_prob(text, raw_score(text, cfg), cfg)
 }
 
 fn raw_score(text: &str, cfg: &RoutingConfig) -> u32 {

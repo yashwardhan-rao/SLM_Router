@@ -69,6 +69,7 @@ pub fn new_record(seq: u64, session_id: String, source: SessionSource, policy: P
         completion_tokens: 0,
         tokens_estimated: false,
         saved_usd: None,
+        classifier_score: None,
     }
 }
 

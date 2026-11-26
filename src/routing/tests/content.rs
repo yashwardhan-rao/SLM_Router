@@ -171,3 +171,17 @@ fn rule5_short_follow_up_in_a_long_chat_stays_local() {
         ok(Target::Local, Reason::Default)
     );
 }
+
+#[test]
+fn the_logged_classifier_score_is_the_one_rule5_compared() {
+    let cfg = RoutingConfig::default();
+    let hard = classifier_score(&text(CUDA), &cfg).unwrap();
+    let easy = classifier_score(&text("hi"), &cfg).unwrap();
+    assert!(hard >= cfg.classifier_threshold, "{hard}");
+    assert!(easy < cfg.classifier_threshold, "{easy}");
+    let off = RoutingConfig {
+        classifier_threshold: 1.01,
+        ..Default::default()
+    };
+    assert_eq!(classifier_score(&text(CUDA), &off), None);
+}

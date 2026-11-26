@@ -120,3 +120,16 @@ async fn a_log_write_failure_does_not_fail_the_request() {
     let (status, _) = post_chat(&r.base, &user("hi"), &[]).await;
     assert_eq!(status, 200);
 }
+
+#[tokio::test]
+async fn the_classifier_score_is_logged_so_its_threshold_can_be_tuned() {
+    let r = rig(Mode::Ok, Mode::Ok, |_| {}).await;
+    post_chat(&r.base, &user("hi"), &[]).await;
+    let score = log_lines(&r.dir.log())[0]["classifier_score"].as_f64();
+    assert!(score.is_some_and(|p| (0.0..1.0).contains(&p)), "{score:?}");
+
+    let off = rig(Mode::Ok, Mode::Ok, |c| c.routing.classifier_threshold = 2.0).await;
+    post_chat(&off.base, &user("hi"), &[]).await;
+    let l = &log_lines(&off.dir.log())[0];
+    assert!(l["classifier_score"].is_null(), "disabled classifier: {l}");
+}

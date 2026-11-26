@@ -29,6 +29,8 @@ pub struct Record {
     pub completion_tokens: u64,
     pub tokens_estimated: bool,
     pub saved_usd: Option<f64>,
+    /// Rule 5 classifier probability, 3 decimals; null when the classifier is disabled.
+    pub classifier_score: Option<f64>,
 }
 
 pub fn now_ms() -> u64 {

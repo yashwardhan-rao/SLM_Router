@@ -10,7 +10,7 @@ use super::{
 };
 use crate::{
     errors::ApiError,
-    routing::{Features, Policy, Reason, Target, decide},
+    routing::{Features, Policy, Reason, Target, classifier_score, decide},
     session::SessionSource,
     upstream::{Api, Opened, Reply},
 };
@@ -63,6 +63,8 @@ pub async fn serve(s: Arc<AppState>, headers: &HeaderMap, job: Job) -> Result<Re
     rec.reason = decision.reason;
     rec.pinned = decision.reason == Reason::Pinned;
     rec.stream = body["stream"] == true;
+    rec.classifier_score =
+        classifier_score(&feats, &s.cfg.routing).map(|p| (f64::from(p) * 1000.0).round() / 1000.0);
 
     let (mut result, skipped) = attempt(&s, &mut body, api, decision.target).await;
     if decision.target == Target::Local && local_failed(&result) {
