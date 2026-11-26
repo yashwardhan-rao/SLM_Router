@@ -85,10 +85,20 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
   2. Existing pin, with one-way local-to-cloud escalation only.
   3. Capability: images, tools, tool_choice, or JSON-schema response format go to cloud unless `local_supports_tools` is set.
   4. Context: estimated tokens above `local_max_context_tokens` go to cloud.
-  5. Complexity: cloud if estimated prompt tokens exceed `complex_prompt_tokens` (default 1500), or the last user message scores at least `complexity_threshold` (default 2): +2 for any reasoning cue, +1 per distinct hint cue (at most +2), +1 for code, +1 for big-O. Cues match whole words and both cue lists are configurable.
+  5. Complexity: cloud if estimated prompt tokens exceed `complex_prompt_tokens` (default 1500), or the last user message scores at least `complexity_threshold` (default 2): +2 for any reasoning cue, +1 per distinct hint cue (at most +2), +1 for code, +1 for big-O. Cues match whole words, both cue lists are configurable, and they only count in a message longer than `cue_min_chars`. Failing that, cloud with reason `classifier` if the Rule 5 classifier gives the last user message a probability of at least `classifier_threshold` (default: the value calibrated into the model; above 1.0 disables it).
   6. Default: local.
 - Token estimate is by symbol density (letter runs, digit runs, symbols) plus 4 per message, documented as approximate. No tokenizer dependency. Rule 4 and the forced-local context check keep 512 tokens free for the reply; `local_max_context_tokens` defaults to 4096.
 - The reason string is the rule name and is what gets logged.
+
+**Rule 5 classifier**
+- L2 logistic regression trained offline by `scripts/train.py` on synthetic prompts, each labelled by a judge model on whether the local model's own answer was good enough. It is embedded in the binary (`assets/rule5.bin`) and decoded once, so scoring does no I/O.
+- Features of the last user message, identical in `src/routing/features.rs` and `scripts/features.py` (pinned by parity fixtures):
+  - Words: lowercase, split on anything that is not a letter or digit.
+  - Sparse: word unigrams (`w:`+word), word bigrams (`b:`+w1+` `+w2) and char 3- to 5-grams of ` `+word+` ` (`c:`+gram), each hashed with FNV-1a 32 into 2^16 buckets and counted once. The sparse dot product is divided by sqrt(active buckets), and is 0 when there are none.
+  - Dense: `is_code`, `big_o`, `min(cue_score, 4) / 4`, `min(log2(max(tokens, 1)), 12) / 12`, where tokens is the last message's estimate + 4, never the conversation's.
+- Probability: `sigmoid(bias + sparse + dense . w_dense)`.
+- Binary format, little-endian, 65,574 bytes: magic `SLR5`, u16 version (1), u32 bucket count (65536), f32 sparse scale, f32 bias, f32 calibrated threshold, 4 x f32 dense weights, then 65536 x i8 sparse weights (weight = i8 x scale).
+- The threshold is calibrated on the dev split only: the lowest value that sends no easy prompt to cloud, plus 0.02. The holdout split is never used to train or tune.
 
 **Policy**
 - Values: `auto` (default), `local-only`, `cloud-only`. Set in config and tightened per request via `X-Router-Policy`. A header can never loosen the config.
@@ -157,6 +167,6 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 
 - Assumption to verify during implementation: Ollama's OpenAI-compatible endpoint ignores a per-request `keep_alive`, so the router cannot control model residency. The pin TTL is therefore a config value the user aligns with their Ollama keep-alive setting.
 - The 15000 ms default for the local first-byte timeout is deliberately long: a short timeout would fire during cold model loads and send requests to cloud that should stay local.
-- The reasoning-cue list and thresholds are crude by design and live in config so they can be tuned from the log data before any classifier is considered.
+- The reasoning-cue list and thresholds are crude by design and live in config so they can be tuned from the log data. Since v0.4.0 the Rule 5 classifier covers hard prompts that carry no cue word; the cues stay as the first, explainable path.
 - The README still describes the Python stack, four tiers and a React dashboard; it is a design doc and should be trimmed to match this spec.
 - Savings are a counterfactual estimate. They are only as accurate as the configured prices and the token counts, and the log flags estimated counts.
