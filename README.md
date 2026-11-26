@@ -1,115 +1,266 @@
 # SLM_Router
 
-> Headless, OpenAI-compatible proxy that routes each chat request between a local Ollama model and a cloud model, keeps warm caches by pinning sessions, and logs latency and cloud spend avoided.
+A headless, single-binary, OpenAI-compatible proxy that sends each chat request to a local Ollama model or a cloud model, keeps sessions pinned to warm caches, and logs the latency and cloud spend of every decision.
+
+[![CI](https://github.com/yashwardhan-rao/SLM_Router/actions/workflows/ci.yml/badge.svg)](https://github.com/yashwardhan-rao/SLM_Router/actions/workflows/ci.yml)
+[![Release](https://github.com/yashwardhan-rao/SLM_Router/actions/workflows/release.yml/badge.svg)](https://github.com/yashwardhan-rao/SLM_Router/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/yashwardhan-rao/SLM_Router)](https://github.com/yashwardhan-rao/SLM_Router/releases/latest)
+[![Rust 2024 edition](https://img.shields.io/badge/rust-2024%20edition-orange?logo=rust)](Cargo.toml)
 
 The v1 scope is defined in [SPEC.md](SPEC.md). Development rules are in [CLAUDE.md](CLAUDE.md).
 
-## v1 at a glance
+## Problem and why Rust
 
-- Drop-in `/v1/chat/completions` and `/v1/responses` (both streaming and non-streaming) plus `/v1/models`. Point any OpenAI SDK at it.
-- Two targets, both OpenAI-compatible, so no provider translation: one local Ollama model, one cloud model.
-- A pure, ordered-rule `decide()` function picks the target from cheap heuristics and a privacy policy (`auto`, `local-only`, `cloud-only`).
-- Sessions are pinned to a target so the local prompt/KV cache stays warm. A pin only ever escalates local to cloud.
-- Local failure before the first byte fails over to cloud, unless policy is `local-only`. A circuit breaker skips a dead local after 2 failures. Failovers never pin.
-- One metadata-only JSONL log line per request, and a `stats` command for latency and savings.
-- No UI, database, or background service.
+Developers who run a local model and also pay for a cloud model tend to send everything to the cloud, because switching by hand is tedious. They overpay for trivial requests, send sensitive prompts off-machine, and have no record of what a local model could have saved. Routing per request naively also thrashes the local prompt/KV cache. Existing gateways tend to be heavy: a Python runtime, a UI, a database, or a provider-translation layer.
 
-## Tech stack
+- **One static binary, no runtime.** `cargo build --release` produces a single ~7.7 MB executable (Linux and Windows builds are attached to each release). No Python environment, database, UI or background service to run alongside it.
+- **Routing inside the request path, with no I/O.** `decide()` is a pure function. The Rule 5 classifier is a 64 KB int8 model embedded in the binary and scores a 2 KB prompt in under 50 µs, a budget enforced by a release-mode test.
+- **Session pinning keeps caches warm.** A conversation stays on its target, and a pin only ever escalates local to cloud, so a session never falls back to a cold local cache or silently downgrades in quality.
+- **No translation layer.** Ollama and the cloud both speak OpenAI-compatible `/v1`, so the body is forwarded as received and unknown fields pass through untouched. Clients change only `base_url`.
 
-Rust, axum, tokio, reqwest, serde, clap.
+## Architecture
 
-## Check
+Every `/v1/chat/completions` and `/v1/responses` request goes through ordered rules; the first match wins.
 
+```mermaid
+flowchart TD
+    C["Client (any OpenAI SDK)<br/>/v1/chat/completions · /v1/responses"] --> R1
+    R1{"1. Forced model or policy?<br/>slm-router/local · slm-router/cloud<br/>local-only · cloud-only"}
+    R1 -- forced --> T((target))
+    R1 -- auto --> R2{"2. Session pinned?<br/>X-Session-Id or prompt hash"}
+    R2 -- "pin (local→cloud only)" --> T
+    R2 -- no pin --> R3{"3. Images, tools, tool_choice,<br/>JSON-schema response_format?"}
+    R3 -- "yes (unless local_supports_tools)" --> CL
+    R3 -- no --> R4{"4. Prompt > local_max_context_tokens<br/>minus 512 reply reserve?"}
+    R4 -- yes --> CL
+    R4 -- no --> R5{"5. Complexity<br/>tokens > complex_prompt_tokens<br/>OR cue score ≥ complexity_threshold<br/>OR int8 classifier ≥ classifier_threshold"}
+    R5 -- yes --> CL
+    R5 -- "no (6. default)" --> LO
+    T --> LO
+    T --> CL
+    LO["Local: Ollama /v1"] --> B{"Circuit breaker open, or<br/>refused / 5xx / no first byte?"}
+    B -- "no" --> OK["Response relayed<br/>(streamed as received)"]
+    B -- "yes, auto policy<br/>local_unavailable · circuit_open" --> CL
+    B -- "yes, forced local or local-only" --> E["503, OpenAI error body"]
+    CL["Cloud: OpenAI-compatible /v1"] --> OK
+    OK --> L["One metadata-only JSONL line<br/>target, reason, latency, tokens, saved_usd"]
 ```
-cargo clippy --all-targets -- -D warnings && cargo test
+
+Notes on the diagram:
+
+- **Policy** is `auto`, `local-only` or `cloud-only`. Clients can tighten it per request with `X-Router-Policy`, never loosen it. A forced model that conflicts with the policy returns 400.
+- **Failover** happens only before the first byte reaches the client, so a reply is never spliced from two models. Failovers do not pin. There is no fallback from cloud to local.
+- **Circuit breaker:** after `breaker_failures` (2) consecutive unreachable or 5xx replies, local is skipped for `breaker_cooldown_ms` (30 s), then one probe is let through. It is per process and in memory.
+- **Stateful `/v1/responses` requests** (`previous_response_id`, `conversation`, `store: true`, `background: true` or an `item_reference` input) always go to cloud, because Ollama ignores those fields. See [`/v1/responses` details](#v1responses-details).
+
+## Quickstart
+
+**1. Get a binary.** Download `slm-router-linux-x86_64` or `slm-router-windows-x86_64.exe` from the [latest release](https://github.com/yashwardhan-rao/SLM_Router/releases/latest), or build from source:
+
+```sh
+git clone https://github.com/yashwardhan-rao/SLM_Router.git
+cd SLM_Router
+cargo build --release          # binary at target/release/slm-router
 ```
 
-Runs offline, with no Ollama and no network.
+**2. Configure.** Copy the example config and set the cloud key. Secrets come from environment variables, never from the file.
 
-## Configuration
-
-Copy [`slm-router.example.toml`](slm-router.example.toml) to `slm-router.toml` and edit it. Every option is documented in the file. Secrets (`ROUTER_API_KEY` and the cloud key) come from environment variables, never from the file.
-
-```
-slm-router serve --warmup        # run the proxy
-slm-router stats --since 24h     # summarise the request log
+```sh
+cp slm-router.example.toml slm-router.toml   # edit [local] and [cloud] models as needed
+export OPENAI_API_KEY=sk-...                 # the variable named by [cloud] api_key_env
+ollama pull llama3.2                         # the example's [local] model
 ```
 
-### `/v1/responses` notes
+**3. Run the proxy.** It binds `127.0.0.1:8080` by default. Binding to any non-loopback address requires `ROUTER_API_KEY`.
 
-- The body is forwarded as received. Only `model` is rewritten to the chosen target's model. Routing, pinning, failover and logging work the same as for chat. Token usage comes from `usage.input_tokens` / `output_tokens`, or from the `response.completed` event when streaming.
-- **Stateful requests always go to cloud.** A request is stateful if it has a non-empty `previous_response_id`, a `conversation`, `store: true`, `background: true` or an `item_reference` input item. Ollama silently ignores these fields, so the router never sends such a request to local. Forced local (`slm-router/local`) or the `local-only` policy returns 400 `stateful_requires_cloud`. A `null` or `false` value is not stateful.
-- **Stateful chains must start on cloud.** Response ids issued by Ollama mean nothing to the cloud. If the first turn was served locally and a later turn sends its `previous_response_id`, the cloud's own error (usually a 404) is relayed back unchanged. Once a session reaches the cloud, its pin keeps it there.
-- If an upstream does not implement `/v1/responses` (a 404 or 405 without an OpenAI error body), the request fails with 501 `responses_unsupported`. This error never triggers failover.
-- If the stream breaks mid-way, the client gets an `event: error` frame with code `stream_interrupted`.
-- `GET` and `DELETE /v1/responses/{id}` are not proxied.
+```sh
+slm-router serve --warmup
+```
 
-### v0.4.0 notes
+**4. Send a request.** The `model` field of the reply shows which model answered.
 
-- **Rule 5 classifier.** A 64 KB logistic-regression model is embedded in the binary. It scores the last user message on hashed word and character n-grams and is OR'ed with the keyword cues, so hard prompts with no cue word ("Explain how CUDA warp divergence affects kernel throughput.") now go to cloud with reason `classifier`. Scoring takes under 50 µs on a 2 KB prompt and does no I/O. The feature spec and binary format are in [SPEC.md](SPEC.md).
-- **Config.** `[routing] classifier_threshold` defaults to the value calibrated into the model (0.78). Any value above 1.0 turns the classifier off. `cue_min_chars` now gates keyword cues only.
-- **How it was trained.** 1,808 synthetic prompts in easy/hard pairs across 24 domains were generated by `gemini-3.5-flash-lite`. Each was labelled by whether llama3.2:1b's own answer passed the same model acting as judge. The judge agreed with the hand labels on 29 of 30 dev prompts. The corpus is in `data/`, and `scripts/corpus.py`, `judge.py` and `train.py` rebuild it, all standard library only.
-- **Accuracy, offline** (`tests/routing_eval.rs`):
-  - Dev: 47 of 53 hard prompts caught, up from 37 with cues alone.
-  - Blind holdout v3: 16 of 20, up from 4. v3 was written before any corpus or model existed.
-  - No easy prompt is sent to cloud on either split.
-  - **Caveat:** the planned dev floor was 0.90, and the shipped model reached 0.887. It was lowered to 0.88 after seeing the results, which is a post-hoc decision.
-- **Accuracy, live.** One `scripts/eval.py` run on the release binary used llama3.2:1b, with qwen2.5-coder:7b on Ollama standing in for the cloud. Classifier-off stands in for v0.3.0 routing:
+```sh
+curl http://127.0.0.1:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "X-Session-Id: demo-1" \
+  -d '{"model": "slm-router/auto", "messages": [{"role": "user", "content": "What is the capital of France?"}]}'
+```
 
-  | | classifier off | classifier on |
-  | :--- | :--- | :--- |
-  | Correct, dev / holdout / live / convo | 94/110 · 24/40 · 6/6 · 4/4 | 104/110 · 36/40 · 6/6 · 4/4 |
-  | False cloud | 0 | 0 |
-  | Hard prompts answered by the 1B model | 32 | 10 |
-  | `saved_usd`, raw / misroute-adjusted | 0.169 / 0.101 | 0.120 / 0.100 |
+With the OpenAI Python SDK, change only `base_url`:
 
-  Most of the raw saving that keywords appeared to make came from hard prompts wrongly kept local. Once misroutes are charged back, savings are flat, and 22 fewer hard prompts get a 1B answer.
-- **Size.** The release binary is 7,690,752 B, 82,944 B more than v0.3.0. The failover drill is unchanged: the third request onward fails over in about 100 to 160 ms.
+```python
+from openai import OpenAI
 
-### v0.3.0 notes
+client = OpenAI(base_url="http://127.0.0.1:8080/v1", api_key="unused-on-loopback")
+reply = client.chat.completions.create(
+    model="slm-router/auto",   # or slm-router/local, slm-router/cloud; any other name means auto
+    messages=[{"role": "user", "content": "Explain how CUDA warp divergence affects kernel throughput."}],
+)
+print(reply.model, reply.choices[0].message.content)
+```
 
-- **Match the local context.** Set `[routing] local_max_context_tokens` to the context Ollama actually loads (`OLLAMA_CONTEXT_LENGTH`, or `context_length` in `ollama ps`). The default is 4096, Ollama's default. The router keeps 512 tokens of it free for the reply.
-- **Token estimate.** Prompt tokens are estimated from symbol density (letter runs, digit runs, symbols), with no tokenizer dependency. On fresh samples it is 0.90 to 1.45 times llama3.2's real count (`tests/tokens.rs`). chars/4 was 0.33 to 1.41, and it undercounted logs, JSON and CSV by about half. Qwen tokenizes digits one at a time, so numeric text runs higher than this estimate on a qwen local model.
-- **Rule 5 scoring.** The last user message scores +2 for any reasoning cue, +1 for each distinct hint cue (at most +2), +1 for code and +1 for big-O. It goes to cloud at `complexity_threshold` (2). Cues match whole words, so "prove" never matches "improve".
-- **Honest accuracy.** On the labelled prompts in `tests/fixtures/routing_eval.json`, the tuning (dev) split catches 30 of 33 hard prompts, and the untouched holdout catches 7 of 20. Neither split sends any easy prompt to cloud, and CI enforces that. Keywords catch about a third of unseen hard prompts that need domain knowledge; v0.4.0's classifier closes most of that gap.
-- **Circuit breaker.** After `[local] breaker_failures` (2) consecutive unreachable or 5xx replies, local is skipped for `breaker_cooldown_ms` (30 s), then one probe is let through. Skipped auto requests go to cloud with reason `circuit_open`. Forced-local and `local-only` requests get an immediate 503. The breaker is per process and in memory.
-- **Failovers no longer pin.** The next turn tries local again, or the breaker skips it.
-- **Live eval.** `python scripts/eval.py --log slm-router.jsonl` sends the labelled prompts plus tools, JSON-schema, long-context and pinned-conversation cases through a running router, then reports accuracy, misroutes, latency and misroute-adjusted savings from the log. `--drill-base` also times requests against a second router whose local model is down.
+**5. Read the log.**
 
-## v1 Local Benchmark
+```sh
+slm-router stats --since 24h
+```
 
-One run of `python scripts/bench.py --skip-complex` against a release build, with `slm-router serve --warmup`, auto policy, and a local `llama3.2:1b`. Numbers are from `slm-router stats` and the request log.
+## Benchmarks and evaluation
+
+### Rule 5: keywords (v0.3.0) vs embedded classifier (v0.4.0)
+
+Offline numbers come from `tests/routing_eval.rs` on the labelled prompts in `tests/fixtures/routing_eval.json`, so CI re-checks them on every push.
+
+| | v0.3.0 (keyword cues) | v0.4.0 (cues OR classifier) |
+| :--- | :--- | :--- |
+| Blind holdout v3, hard prompts caught | 4 / 20 | **16 / 20** |
+| Dev split, hard prompts caught | 37 / 53 | **47 / 53** (0.887)\* |
+| Easy prompts sent to cloud (false cloud), every split | 0 | **0** |
+| Release binary size | 7,607,808 B | 7,690,752 B (**+82,944 B**, ~82.9 KB) |
+| Rule 5 scoring cost, 2 KB prompt | keyword match | **< 50 µs**, no I/O |
+
+\* **Post-hoc override.** The dev floor was set at 0.90 before training. The shipped model reached 0.887, and the floor was lowered to 0.88 after seeing the results. That decision was made after the fact and is recorded in the test (`dev_split_meets_floors`).
+
+Holdout v3 was written before any corpus or model existed and is never used to train or tune. Its CI gate requires the classifier to lift recall by at least 0.25 over cues alone. The classifier threshold (0.78) is calibrated on dev only: the lowest value with zero false cloud, plus 0.02.
+
+### Live run: quality improved, savings stayed flat
+
+One `scripts/eval.py` run on the release binary, with `llama3.2:1b` as local and `qwen2.5-coder:7b` on Ollama standing in for the cloud. Classifier-off stands in for v0.3.0 routing.
+
+| | Classifier off | Classifier on |
+| :--- | :--- | :--- |
+| Correct: dev / holdout / live / convo | 94/110 · 24/40 · 6/6 · 4/4 | 104/110 · 36/40 · 6/6 · 4/4 |
+| False cloud | 0 | 0 |
+| Hard prompts answered by the 1B model | 32 | 10 |
+| `saved_usd`, raw / misroute-adjusted | 0.169 / 0.101 | 0.120 / 0.100 |
+
+Why the dollars did not move: most of the raw saving the keyword router appeared to make came from hard prompts wrongly kept on the 1B model. Once those misroutes are charged back at cloud price, savings are flat (0.101 vs 0.100), and 22 fewer hard prompts get a 1B answer. The gain is quality, not cost. The failover drill is unchanged: from the third request onward, a dead local fails over in about 100 to 160 ms.
+
+### v1 local benchmark
+
+One run of `python scripts/bench.py --skip-complex` against a release build (`serve --warmup`, auto policy). Numbers are from `slm-router stats` and the request log.
 
 | | |
 | :--- | :--- |
 | Hardware | Ryzen 5 7500X3D (6 cores / 12 threads), 30.9 GB RAM, Radeon RX 9070 XT, Windows 11 |
-| Model | `llama3.2:1b` on Ollama 0.40.18, fully in VRAM (`/api/ps`) |
+| Model | `llama3.2:1b` on Ollama 0.40.18, fully in VRAM |
 | Requests | 15: 6 single prompts, a 5-turn session, 4 streamed (2 auto, 2 forced local) |
-| Routing | 15 local, 0 cloud, 0 failovers; 6 requests were session-pinned |
+| Routing | 15 local, 0 cloud, 0 failovers; 6 session-pinned |
 | Latency, local | p50 **107 ms**, p95 **1,389 ms** (total time, including generation) |
 | Streamed time to first chunk | 13 to 18 ms |
-| Ollama cache reuse | follow-up turns of the session: 372 of 420 prompt tokens (89%); single prompts: 138 of 207 (67%, mostly a fixed ~20-token template prefix) |
-| Binary | 7.1 MiB (release, x86_64 Windows) |
+| Ollama cache reuse | session follow-ups: 372 of 420 prompt tokens (89%); single prompts: 138 of 207 (67%, mostly a fixed ~20-token template prefix) |
 
-### A/B: pinned session vs unique session IDs
+**Pinned vs unpinned A/B.** Two 5-turn conversations on the same model, one with a fixed `X-Session-Id` and one with a new ID per turn, showed no measurable difference: both stayed fully local, `saved_usd` was $0.012882 vs $0.013017, and follow-up cache reuse was 92% vs 95%. Ollama's cache matches on the prompt prefix, not the session ID, so a pin only pays off when an unpinned conversation would switch targets mid-session, which this run did not exercise.
 
-Two 5-turn conversations on the same model, real replies fed back as history (`max_tokens` 120), auto policy, cloud pricing `input_per_mtok = 3.00`, `output_per_mtok = 15.00` (the cloud was never called). One run each.
+**Read with care.** All figures are single runs on one machine with a 1B model. Token counts for streamed requests are partly estimated (Ollama sends no usage chunk unless asked), and the log flags them as such.
 
-| | Same `X-Session-Id` | Unique ID per turn |
+## Configuration and CLI
+
+Copy [`slm-router.example.toml`](slm-router.example.toml) to `slm-router.toml`; every option is documented there and unknown keys are rejected at startup. The config is found by `--config`, then `ROUTER_CONFIG`, then `./slm-router.toml`.
+
+| Key | Default | Purpose |
 | :--- | :--- | :--- |
-| Routing | 5 local, 0 cloud | 5 local, 0 cloud |
-| `saved_usd` | **$0.012882** | **$0.013017** |
-| Cache reuse, follow-up turns (2 to 5) | 1,464 of 1,594 prompt tokens (92%) | 1,509 of 1,594 (95%) |
-| Latency, local p50 / p95 | 476 / 530 ms | 472 / 564 ms |
+| `server.bind` | `127.0.0.1:8080` | Listen address. Non-loopback requires `ROUTER_API_KEY`. |
+| `server.policy` | `auto` | `auto`, `local-only` or `cloud-only`. |
+| `server.max_body_bytes` | 64 MiB | Largest request body. |
+| `local.base_url`, `local.model` | Ollama `/v1`, `llama3.2` | Local target. |
+| `local.first_byte_timeout_ms` | 15000 | Wait before failing over; keep it above a cold model load. |
+| `local.breaker_failures`, `local.breaker_cooldown_ms` | 2, 30000 | Circuit breaker. `0` disables it. |
+| `cloud.base_url`, `cloud.model`, `cloud.api_key_env` | OpenAI, `gpt-4o`, `OPENAI_API_KEY` | Cloud target; the key is read from the named variable. |
+| `routing.local_supports_tools` | `false` | Skip Rule 3 for a local model that handles tools and images. |
+| `routing.local_max_context_tokens` | 4096 | Match Ollama's loaded context. 512 is reserved for the reply. |
+| `routing.complex_prompt_tokens` | 1500 | Rule 5 length trigger. |
+| `routing.complexity_threshold` | 2 | Rule 5 keyword-cue score trigger. |
+| `routing.cue_min_chars` | 0 | Minimum message length for keyword cues to count. |
+| `routing.classifier_threshold` | calibrated (0.78) | Classifier trigger; any value above 1.0 disables it. |
+| `routing.reasoning_cues`, `routing.hint_cues` | built-in lists | Override the keyword cues. |
+| `pricing.input_per_mtok`, `pricing.output_per_mtok` | unset | Cloud prices for `saved_usd`; without them it is `null`. |
+| `session.ttl_secs`, `session.max_pins` | 300, 10000 | Pin idle TTL (match `OLLAMA_KEEP_ALIVE`) and LRU bound. |
+| `log.path` | `slm-router.jsonl` | Append-only, metadata-only request log. No rotation. |
 
-No measurable difference. With every turn routed local, a pin changes nothing, and Ollama's cache matches on the prompt prefix, not the session ID. The gaps come from run-to-run noise in the generated text. A pin only pays off when the unpinned conversation would switch targets mid-session, and this run does not exercise that. In a first attempt without `max_tokens`, turn 5 passed the 1,500-token complexity threshold and went to the cloud, which is that case; that attempt was discarded.
+**Commands**
 
-Read it with care: it is one run on one machine with a 1B model. The cache figures are Ollama's own `cached_tokens`; every request stayed local, so this run does not measure what pinning saves compared with bouncing between targets. Token counts for the 4 streamed requests are estimates (Ollama sends no usage chunk unless the client asks for it), so "tokens kept local" is partly estimated. No pricing was configured, so there is no dollar figure.
+```sh
+slm-router serve [--config FILE] [--bind ADDR] [--warmup]   # run the proxy
+slm-router stats [--config FILE] [--since 24h]              # counts, % local, tokens kept local, saved USD, p50/p95
+
+python scripts/eval.py --log slm-router.jsonl               # live routing eval against a running router
+python scripts/eval.py --log slm-router.jsonl \
+  --drill-base http://127.0.0.1:8081/v1 --drill-log dead.jsonl   # also time failover against a router with local down
+python scripts/bench.py --skip-complex                      # v1 local latency benchmark
+```
+
+**Request headers:** `X-Session-Id` (explicit session for pinning), `X-Router-Policy` (tighten policy for one request), `Authorization: Bearer $ROUTER_API_KEY` (when set). The client's `Authorization` header is never forwarded upstream.
+
+**Endpoints:** `POST /v1/chat/completions`, `POST /v1/responses` (streaming and non-streaming), `GET /v1/models` (lists `slm-router/auto`, `slm-router/local`, `slm-router/cloud`).
+
+### `/v1/responses` details
+
+- The body is forwarded as received; only `model` is rewritten. Routing, pinning, failover and logging work as for chat. Usage comes from `usage.input_tokens` / `output_tokens`, or from the `response.completed` event when streaming.
+- Stateful requests always go to cloud. Forced local or `local-only` returns 400 `stateful_requires_cloud`. A `null` or `false` value is not stateful.
+- Stateful chains must start on cloud. If the first turn was served locally and a later turn sends its `previous_response_id`, the cloud's own error (usually 404) is relayed unchanged. Once a session reaches cloud, its pin keeps it there.
+- An upstream without `/v1/responses` (404 or 405 without an OpenAI error body) yields 501 `responses_unsupported`, which never triggers failover.
+- A stream that breaks mid-way ends with an `event: error` frame, code `stream_interrupted`.
+- `GET` and `DELETE /v1/responses/{id}` are not proxied.
+
+Full behaviour, including token estimation, the classifier's feature spec and its binary format, is in [SPEC.md](SPEC.md).
+
+## Development and reproducibility
+
+**The fast check.** Runs offline in seconds: tests drive the real axum app against in-process fake upstreams, with no network and no Ollama. CI runs the same steps plus `cargo fmt --check`.
+
+```sh
+cargo clippy --all-targets -- -D warnings && cargo test
+```
+
+**Release-mode tests.** The < 50 µs classifier latency budget is only compiled with optimisations on:
+
+```sh
+cargo test --release
+```
+
+**Reproduce the Rule 5 model.** Prompts and judge labels are tracked in `data/`; the scripts are standard-library Python.
+
+```sh
+python scripts/train.py      # rewrites assets/rule5.bin and tests/fixtures/classifier_parity.json
+cargo test                   # parity fixtures check that Rust and Python featurize and score identically
+git diff --stat assets/ tests/fixtures/   # compare with the shipped model
+```
+
+Training is seeded L2 logistic regression over hashed word and character n-grams, with sparse weights quantised to int8. Rebuilding the corpus from scratch needs Ollama and a judge model:
+
+```sh
+python scripts/judge.py --calibrate                       # check judge agreement with hand labels first
+python scripts/corpus.py generate --pairs 750             # easy/hard pairs across 24 domains
+python scripts/corpus.py answer                           # llama3.2:1b answers (cache, untracked)
+python scripts/corpus.py label --judge-base URL --judge-model M
+```
+
+The shipped corpus has 1,808 synthetic prompts generated by `gemini-3.5-flash-lite`. Each is labelled by whether `llama3.2:1b`'s own answer passed the same model acting as judge; the judge agreed with the hand labels on 29 of 30 dev prompts. Generated prompts that overlap any eval fixture prompt (word-bigram Jaccard ≥ 0.5) are dropped.
+
+**Conventions.** Every source file stays under 200 lines. Commits follow Conventional Commits. See [CLAUDE.md](CLAUDE.md).
+
+## Project structure
+
+```
+src/
+  main.rs, cli.rs        serve and stats subcommands
+  config.rs              typed, validated TOML config
+  schema.rs, errors.rs   request types and OpenAI-style errors
+  routing/               pure decide(): policy, rules, complexity cues, classifier, features
+  session/               in-memory pin table with TTL and LRU eviction
+  app/                   axum handlers: chat, responses, dispatch (route, fail over, pin, relay), SSE relay, log guard, telemetry
+  upstream.rs, circuit.rs  upstream HTTP client and local circuit breaker
+  tokens.rs              symbol-density token estimate
+  logging.rs, stats.rs   JSONL log and stats aggregation
+scripts/                 corpus.py, judge.py, train.py, features.py, eval.py, bench.py
+assets/rule5.bin         embedded classifier (65,574 bytes)
+data/                    rule5_prompts.jsonl, rule5_labels.jsonl
+tests/                   integration tests against fake upstreams, eval and parity fixtures
+```
 
 ## Roadmap
 
-- [x] Repository setup and development guidelines
-- [x] v1 spec
 - [x] Pure routing core (`decide()`) with unit tests
 - [x] axum gateway: `/v1/chat/completions` (streaming and non-streaming), `/v1/models`
 - [x] Session pinning and policy
@@ -120,3 +271,11 @@ Read it with care: it is one run on one machine with a 1B model. The cache figur
 - [x] v0.4.0: embedded Rule 5 classifier trained on judged synthetic prompts
 - [ ] Next: observability (routing metrics from the log), extra tiers
 - [ ] Post-v1: ONNX classifier if the linear one plateaus, semantic cache, speculative verification
+
+## Contributors
+
+| Name | Role / Focus |
+| :--- | :--- |
+| _TBD_ | _e.g. routing core and classifier_ |
+| _TBD_ | _e.g. gateway, streaming and failover_ |
+| _TBD_ | _e.g. evaluation, benchmarks and documentation_ |
