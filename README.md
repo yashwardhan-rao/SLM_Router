@@ -269,8 +269,20 @@ tests/                   integration tests against fake upstreams, eval and pari
 - [x] v0.2.0: `/v1/responses` passthrough (streaming, stateful-to-cloud routing)
 - [x] v0.3.0: density token estimate, Rule 5 scoring, reply reserve, local circuit breaker
 - [x] v0.4.0: embedded Rule 5 classifier trained on judged synthetic prompts
-- [ ] Next: observability (routing metrics from the log), extra tiers
-- [ ] Post-v1: ONNX classifier if the linear one plateaus, semantic cache, speculative verification
+
+**Where 1.0 is headed.** One binary. Point your OpenAI SDK at it. It answers easy prompts with your local model, sends hard ones to the cheapest cloud model that can handle them, never lets private prompts leave your machine, and shows how much you saved.
+
+| Version | Theme | Main items |
+| :--- | :--- | :--- |
+| v0.5.0 | Trustworthy numbers | exact streaming usage (`include_usage`, with the usage chunk stripped when the client did not ask for it), per-reason `stats`, classifier score in the log |
+| v0.6.0 | N tiers | any number of OpenAI-compatible targets with price and capabilities; `decide()` picks the cheapest tier predicted to succeed; failover and pins move up the ladder only |
+| v0.7.0 | Calibrate | `slm-router calibrate` retrains the classifier on your own models, with a Rust trainer so no Python is needed; per-tier thresholds |
+| v0.8.0 | Adoption | `slm-router init` config wizard with editable pricing presets, macOS build, Docker image, example systemd unit |
+| v1.0.0 | Stable | versioned config and log schemas, `slm-router report`, semver from here on |
+
+Post-1.0, opt-in only: speculative verification (try a cheap tier, escalate on a weak answer), a multi-turn-aware classifier, a semantic cache.
+
+Not planned at any stage: a UI or dashboard, provider translation, multi-tenant auth and quotas, Prometheus endpoints, built-in log rotation.
 
 ## Contributors
 

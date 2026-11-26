@@ -151,22 +151,25 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 ## Out of Scope
 
 - Any frontend, dashboard or UI.
-- ONNX or learned classifier, semantic response cache, and Stage 3 speculative verification or quality-based escalation.
-- More than one local and one cloud model; Groq, Together or local-frontier tiers.
+- ONNX classifier, semantic response cache, and Stage 3 speculative verification or quality-based escalation (post-1.0, opt-in).
+- More than one local and one cloud model (planned for v0.6.0, see below).
 - Provider-format translation (non-OpenAI-compatible APIs).
 - Per-user budgets, quotas, multi-tenant auth.
 - Hot config reload.
 - Prometheus or other metrics endpoints.
 - Embeddings, legacy completions and other OpenAI endpoints besides chat completions and the models list.
 - Log rotation, log shipping, persistent pins.
-- Windows-service or other packaging and installers.
+- Windows-service packaging and installers (Docker and a systemd example are planned for v0.8.0).
 - A published client SDK (the importable routing function is the only library surface).
 - Counting electricity or hardware cost in savings.
+
+## Planned for 1.0
+
+This spec describes v1 as two targets. The project now aims to be an open-source product, and the roadmap in [README.md](README.md#roadmap) extends it: N cost-ordered tiers (v0.6.0), `slm-router calibrate` to retrain the classifier on the user's own models (v0.7.0), and install tooling (v0.8.0). Each milestone updates this spec when it lands.
 
 ## Further Notes
 
 - Assumption to verify during implementation: Ollama's OpenAI-compatible endpoint ignores a per-request `keep_alive`, so the router cannot control model residency. The pin TTL is therefore a config value the user aligns with their Ollama keep-alive setting.
 - The 15000 ms default for the local first-byte timeout is deliberately long: a short timeout would fire during cold model loads and send requests to cloud that should stay local.
 - The reasoning-cue list and thresholds are crude by design and live in config so they can be tuned from the log data. Since v0.4.0 the Rule 5 classifier covers hard prompts that carry no cue word; the cues stay as the first, explainable path.
-- The README still describes the Python stack, four tiers and a React dashboard; it is a design doc and should be trimmed to match this spec.
 - Savings are a counterfactual estimate. They are only as accurate as the configured prices and the token counts, and the log flags estimated counts.
