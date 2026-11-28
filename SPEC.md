@@ -169,7 +169,7 @@ From 1.0.0 the project follows semver. Within 1.x the following are stable. They
 - **Log schema version 1:** exactly these fields, pinned by `tests/log_schema.rs`: `v`, `ts`, `request_id`, `session_id`, `session_source`, `policy`, `target`, `tier`, `reason`, `failed_over`, `pinned`, `stream`, `status`, `outcome`, `ttfb_ms`, `total_ms`, `prompt_tokens`, `completion_tokens`, `tokens_estimated`, `saved_usd`, `classifier_score`. Reasons: `forced`, `policy`, `stateful`, `pinned`, `capability`, `context`, `complexity`, `classifier`, `default`, `local_unavailable`, `tier_unavailable`, `circuit_open`. Outcomes: `ok`, `upstream_error`, `client_disconnect`, `stream_error`. Adding a field or value bumps `v`.
 - **`report --json` schema version 1:** the summary object (`v`, `requests`, `local`, `cloud`, `failovers`, `pct_local`, `tokens_kept_local`, `saved_usd`, `latency_ms.{local,cloud}.{p50,p95}`, `reasons`, `tiers`, `errors` as `[{name, count}]`, `client_disconnects`, `tokens_estimated`, `skipped_lines`).
 - **CLI:** the subcommands and flags above. The `stats` text and the Markdown `report` are for people, not for parsing; scripts should use `--json`.
-- **Library:** `decide()` and its input and output types.
+- **Library:** the `decide()` signature. Its input and output types may gain fields or `Reason` variants in a minor release, so build `Features` with `..Default::default()` and match `Reason` with a wildcard arm.
 
 ## Out of Scope
 
