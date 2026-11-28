@@ -81,6 +81,19 @@ fn init_defaults_to_local_config_without_force() {
 }
 
 #[test]
+fn report_takes_config_since_and_json() {
+    let Command::Report { since, json, .. } = parse(&["report"]).unwrap().command else {
+        panic!("expected report")
+    };
+    assert_eq!((since, json), (None, false));
+    let cli = parse(&["report", "--since", "24h", "--json"]).unwrap();
+    let Command::Report { since, json, .. } = cli.command else {
+        panic!("expected report")
+    };
+    assert_eq!((since.as_deref(), json), (Some("24h"), true));
+}
+
+#[test]
 fn unknown_or_missing_subcommands_fail() {
     assert!(parse(&["explode"]).is_err());
     assert!(parse(&[]).is_err());

@@ -34,6 +34,11 @@ pub fn run_stats_with(prefix: &str, log_lines: Option<&[String]>, extra: &[&str]
 }
 
 pub fn run_stats_raw(prefix: &str, raw: Option<Vec<u8>>, extra: &[&str]) -> Output {
+    run_cmd("stats", prefix, raw, extra)
+}
+
+/// Run `slm-router <sub> --config <temp config>` over a temp log holding `raw`.
+pub fn run_cmd(sub: &str, prefix: &str, raw: Option<Vec<u8>>, extra: &[&str]) -> Output {
     let dir = TempDir::new();
     let log = dir.log();
     if let Some(bytes) = raw {
@@ -47,7 +52,7 @@ pub fn run_stats_raw(prefix: &str, raw: Option<Vec<u8>>, extra: &[&str]) -> Outp
     );
     std::fs::write(&cfg, toml).unwrap();
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_slm-router"));
-    cmd.args(["stats", "--config", cfg.to_str().unwrap()])
+    cmd.args([sub, "--config", cfg.to_str().unwrap()])
         .args(extra);
     cmd.output().unwrap()
 }

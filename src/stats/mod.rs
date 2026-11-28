@@ -1,48 +1,12 @@
-//! `slm-router stats`: summarise the JSONL request log.
+//! `slm-router stats` and `slm-router report`: summarise the JSONL request log.
 
-use serde::Deserialize;
 use std::io::BufRead;
 use std::time::Duration;
 
-/// The log fields stats reads; extra fields in a line are ignored.
-#[derive(Deserialize)]
-struct Rec {
-    ts: u64,
-    target: String,
-    failed_over: bool,
-    prompt_tokens: u64,
-    completion_tokens: u64,
-    saved_usd: Option<f64>,
-    total_ms: u64,
-    // Defaults keep hand-written or partial lines readable without counting them as errors.
-    #[serde(default = "unknown")]
-    reason: String,
-    #[serde(default = "ok")]
-    outcome: String,
-    #[serde(default)]
-    tokens_estimated: bool,
-    /// Absent before v0.6.0, when `target` was the tier.
-    #[serde(default)]
-    tier: Option<String>,
-}
-
-fn unknown() -> String {
-    "unknown".into()
-}
-
-fn ok() -> String {
-    "ok".into()
-}
-
-/// `name count` pairs, most frequent first, ties by name.
-fn counts<'a>(names: impl Iterator<Item = &'a str>) -> String {
-    let mut m = std::collections::BTreeMap::<&str, usize>::new();
-    names.for_each(|n| *m.entry(n).or_default() += 1);
-    let mut v: Vec<_> = m.into_iter().collect();
-    v.sort_by_key(|a| std::cmp::Reverse(a.1));
-    let parts: Vec<String> = v.iter().map(|(n, c)| format!("{n} {c}")).collect();
-    parts.join(", ")
-}
+mod markdown;
+mod summary;
+pub use markdown::markdown;
+pub use summary::{Count, Latencies, Latency, Summary, summarize};
 
 /// `30s`, `15m`, `24h` or `7d`.
 pub fn parse_duration(s: &str) -> Result<Duration, String> {
@@ -63,108 +27,56 @@ pub fn parse_duration(s: &str) -> Result<Duration, String> {
         .ok_or_else(bad)
 }
 
-/// Nearest-rank percentile of an ascending slice.
-fn percentile(sorted: &[u64], p: f64) -> Option<u64> {
-    let rank = (p * sorted.len() as f64).ceil() as usize;
-    sorted.get(rank.max(1) - 1).copied()
+fn joined(c: &[Count]) -> String {
+    let parts: Vec<String> = c
+        .iter()
+        .map(|c| format!("{} {}", c.name, c.count))
+        .collect();
+    parts.join(", ")
 }
 
-fn latency(recs: &[&Rec], target: &str) -> String {
-    let mut ms: Vec<u64> = recs
-        .iter()
-        .filter(|r| r.target == target)
-        .map(|r| r.total_ms)
-        .collect();
-    ms.sort_unstable();
-    match (percentile(&ms, 0.5), percentile(&ms, 0.95)) {
+fn latency(l: Latency, target: &str) -> String {
+    match (l.p50, l.p95) {
         (Some(a), Some(b)) => format!("latency_ms p50/p95 {target}: {a}/{b}"),
         _ => format!("latency_ms p50/p95 {target}: n/a"),
     }
 }
 
-/// Streams the log one line at a time; only the records inside the window are kept in memory.
+/// The `stats` text, rendered from one `summarize` pass over the log.
 pub fn report(log: impl BufRead, now_ms: u64, since: Option<Duration>) -> String {
-    let cutoff = since.map_or(0, |d| now_ms.saturating_sub(d.as_millis() as u64));
-    let (mut skipped, mut all) = (0, Vec::new());
-    for line in log.split(b'\n') {
-        let Ok(line) = line else {
-            skipped += 1; // a read error ends the stream; report what was read
-            break;
-        };
-        if line.trim_ascii().is_empty() {
-            continue;
-        }
-        match serde_json::from_slice::<Rec>(&line) {
-            Ok(r) if r.ts >= cutoff => all.push(r),
-            Ok(_) => {}
-            Err(_) => skipped += 1,
-        }
-    }
-    let recs: Vec<&Rec> = all.iter().collect();
+    text(&summarize(log, now_ms, since))
+}
 
-    let local = recs.iter().filter(|r| r.target == "local").count();
-    let cloud = recs.len() - local;
-    let pct = if recs.is_empty() {
-        0.0
-    } else {
-        local as f64 * 100.0 / recs.len() as f64
-    };
-    let kept: u64 = recs
-        .iter()
-        .filter(|r| r.target == "local")
-        .map(|r| r.prompt_tokens + r.completion_tokens)
-        .sum();
-    let saved: Vec<f64> = recs.iter().filter_map(|r| r.saved_usd).collect();
-    let saved = if saved.is_empty() {
-        "n/a".to_string()
-    } else {
-        format!("{:.6}", saved.iter().sum::<f64>())
-    };
-
+pub fn text(s: &Summary) -> String {
+    let saved = s.saved_usd.map_or("n/a".to_string(), |v| format!("{v:.6}"));
     let mut out = vec![
-        format!("requests: {} (local {local}, cloud {cloud})", recs.len()),
         format!(
-            "failovers: {}",
-            recs.iter().filter(|r| r.failed_over).count()
+            "requests: {} (local {}, cloud {})",
+            s.requests, s.local, s.cloud
         ),
-        format!("routed local: {pct:.1}%"),
-        format!("tokens kept local: {kept}"),
+        format!("failovers: {}", s.failovers),
+        format!("routed local: {:.1}%", s.pct_local),
+        format!("tokens kept local: {}", s.tokens_kept_local),
         format!("saved_usd: {saved}"),
-        latency(&recs, "local"),
-        latency(&recs, "cloud"),
+        latency(s.latency_ms.local, "local"),
+        latency(s.latency_ms.cloud, "cloud"),
     ];
-    if !recs.is_empty() {
-        out.push(format!(
-            "reasons: {}",
-            counts(recs.iter().map(|r| r.reason.as_str()))
-        ));
-        let tier = |r: &&Rec| r.tier.clone().unwrap_or_else(|| r.target.clone());
-        let tiers: Vec<String> = recs.iter().map(tier).collect();
-        out.push(format!(
-            "tiers: {}",
-            counts(tiers.iter().map(String::as_str))
-        ));
+    if s.requests > 0 {
+        out.push(format!("reasons: {}", joined(&s.reasons)));
+        out.push(format!("tiers: {}", joined(&s.tiers)));
     }
-    // A client hanging up is not the router's or upstream's failure; it gets its own line.
-    let failed = recs
-        .iter()
-        .filter(|r| r.outcome != "ok" && r.outcome != "client_disconnect");
-    out.push(match failed.clone().count() {
+    let failed: usize = s.errors.iter().map(|c| c.count).sum();
+    out.push(match failed {
         0 => "errors: 0".to_string(),
-        n => format!(
-            "errors: {n} ({})",
-            counts(failed.map(|r| r.outcome.as_str()))
-        ),
+        n => format!("errors: {n} ({})", joined(&s.errors)),
     });
-    let gone = recs.iter().filter(|r| r.outcome == "client_disconnect");
-    out.push(format!("client disconnects: {}", gone.count()));
-    let est = recs.iter().filter(|r| r.tokens_estimated).count();
+    out.push(format!("client disconnects: {}", s.client_disconnects));
     out.push(format!(
-        "tokens estimated: {est} of {} requests",
-        recs.len()
+        "tokens estimated: {} of {} requests",
+        s.tokens_estimated, s.requests
     ));
-    if skipped > 0 {
-        out.push(format!("skipped unreadable log lines: {skipped}"));
+    if s.skipped_lines > 0 {
+        out.push(format!("skipped unreadable log lines: {}", s.skipped_lines));
     }
     out.join("\n")
 }

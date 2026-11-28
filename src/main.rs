@@ -43,17 +43,22 @@ async fn run(cli: Cli) -> Result<(), String> {
                 .map_err(|e| e.to_string())
         }
         Command::Stats { config, since } => {
-            let since = since.as_deref().map(stats::parse_duration).transpose()?;
-            let cfg = offline_config(&config)?;
-            match std::fs::File::open(&cfg.log.path) {
-                Ok(f) => {
-                    let log = std::io::BufReader::new(f);
-                    println!("{}", stats::report(log, logging::now_ms(), since))
-                }
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    println!("no requests logged yet")
-                }
-                Err(e) => return Err(format!("cannot read {}: {e}", cfg.log.path)),
+            match read_log(&config, since.as_deref())? {
+                Some(s) => println!("{}", stats::text(&s)),
+                None => println!("no requests logged yet"),
+            }
+            Ok(())
+        }
+        Command::Report {
+            config,
+            since,
+            json,
+        } => {
+            let s = read_log(&config, since.as_deref())?
+                .unwrap_or_else(|| stats::summarize(&b""[..], 0, None));
+            match json {
+                true => println!("{}", serde_json::to_string_pretty(&s).expect("plain data")),
+                false => print!("{}", stats::markdown(&s, since.as_deref())),
             }
             Ok(())
         }
@@ -76,6 +81,20 @@ async fn run(cli: Cli) -> Result<(), String> {
             );
             Ok(())
         }
+    }
+}
+
+/// The log summarised over the `--since` window; None when nothing has been logged yet.
+fn read_log(config: &str, since: Option<&str>) -> Result<Option<stats::Summary>, String> {
+    let since = since.map(stats::parse_duration).transpose()?;
+    let cfg = offline_config(config)?;
+    match std::fs::File::open(&cfg.log.path) {
+        Ok(f) => {
+            let log = std::io::BufReader::new(f);
+            Ok(Some(stats::summarize(log, logging::now_ms(), since)))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("cannot read {}: {e}", cfg.log.path)),
     }
 }
 

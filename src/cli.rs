@@ -1,4 +1,4 @@
-//! Command line: `serve`, `stats`, `calibrate` and `init`, nothing else.
+//! Command line: `serve`, `stats`, `report`, `calibrate` and `init`, nothing else.
 
 use clap::{Parser, Subcommand};
 
@@ -33,6 +33,17 @@ pub enum Command {
         /// Only include requests newer than this, e.g. `24h`.
         #[arg(long)]
         since: Option<String>,
+    },
+    /// Summarise the request log as Markdown, or JSON with `--json`.
+    Report {
+        #[arg(long, env = "ROUTER_CONFIG", default_value = "slm-router.toml")]
+        config: String,
+        /// Only include requests newer than this, e.g. `24h`.
+        #[arg(long)]
+        since: Option<String>,
+        /// Print the summary as JSON instead of Markdown.
+        #[arg(long)]
+        json: bool,
     },
     /// Suggest a Rule 5 `classifier_threshold` from your own labelled prompts.
     Calibrate {
