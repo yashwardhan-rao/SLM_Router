@@ -81,7 +81,8 @@ base_url = "https://api.openai.com/v1"
 # calls through /v1/responses rather than chat completions.
 model = "gpt-6.2-sol"
 api_key_env = "OPENAI_API_KEY"
-supports_tools = true
+# Chat Completions tool calls route to the Groq tier: this needs /v1/responses for tools, rejects temperature/top_p.
+supports_tools = false
 stateful = true
 hard = true
 input_per_mtok = 2.00

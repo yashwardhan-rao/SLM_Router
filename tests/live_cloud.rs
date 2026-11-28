@@ -2,9 +2,7 @@
 //!
 //!   GROQ_API_KEY=... cargo test --test live_cloud -- --ignored --test-threads=1 --nocapture
 //!   (or OPENAI_API_KEY for gpt-6-luna; SLMR_LIVE_CLOUD_MODEL / SLMR_LIVE_LOCAL_MODEL override the models)
-//!
-//! Needs Ollama on 127.0.0.1:11434 with the local model pulled, except for the failover test.
-//! With no key set, each test prints why and passes without calling anything.
+//! Needs Ollama on 127.0.0.1:11434 (not for failover). With no key, each test skips and passes.
 
 #[macro_use]
 mod live;
@@ -126,6 +124,10 @@ async fn live_4_tool_calls_pass_through_to_cloud() {
     );
     body["tools"] = weather_tool();
     body["tool_choice"] = json!("auto");
+    if c.name == "openai" {
+        // gpt-6-luna takes Chat Completions tools only with reasoning off; its default is medium.
+        body["reasoning_effort"] = json!("none");
+    }
     let (status, text) = post(&r, &body).await;
     assert_eq!(status, 200, "{text}");
     let v: Value = serde_json::from_str(&text).unwrap();

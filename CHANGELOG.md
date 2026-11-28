@@ -13,14 +13,14 @@ Release candidate for 1.0.0. It replaces the 0.7.0, 0.8.0 and 1.0.0 version numb
 - `[[tier]]` presets in the example config at the providers' listed prices on 2026-11-28:
   - local Ollama (unpriced);
   - Groq `openai/gpt-oss-120b` ($0.15 / $0.60);
-  - OpenAI `gpt-6.2-sol` ($2.00 / $10.00). It is a reasoning model, so omit `temperature` and `top_p`, and use `/v1/responses` for tool calling.
+  - OpenAI `gpt-6.2-sol` ($2.00 / $10.00). It is a reasoning model, so omit `temperature` and `top_p`. Its preset sets `supports_tools = false`, because it takes tools only on `/v1/responses`, so Chat Completions tool calls go to the Groq tier.
 
   There is no Anthropic preset: its OpenAI-compatible endpoint rejects fields clients commonly send, such as `temperature` below 1 on current models.
 - Optional top-level config `version`. Absent or `1` is accepted, and any other value is rejected at startup with a clear message. The example config sets `version = 1`.
 - macOS (Apple silicon) binary `slm-router-macos-aarch64` on each release.
 - `Dockerfile` (non-root Debian image, `serve --bind 0.0.0.0:8080`) and `contrib/slm-router.service`, an example systemd unit. No image is published.
 - SPEC lists the surface planned to be stable from 1.0.0: the endpoints, config schema 1, log schema 1 (its 21 fields, reasons and outcomes, pinned by a test), `report --json` schema 1, the CLI and the `decide()` signature.
-- `tests/live_cloud.rs` runs five live checks against local Ollama and a real Groq or OpenAI tier: local routing, forced cloud, streaming with exact usage, tool calling and failover. It is ignored in the offline `cargo test`.
+- `tests/live_cloud.rs` runs five live checks against local Ollama and a real Groq or OpenAI tier: local routing, forced cloud, streaming with exact usage, tool calling and failover. It is ignored in the offline `cargo test`. On OpenAI (`gpt-6-luna`) the tool-calling case sends `reasoning_effort: "none"`, which that model needs for Chat Completions tools.
 
 ### Changed
 - The example config's cloud model is now `gpt-6.2-sol` instead of `gpt-4o`, which OpenAI retires from the API on 2027-01-14 along with `gpt-4o-mini`.
