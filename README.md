@@ -112,7 +112,7 @@ cargo build --release          # binary at target/release/slm-router
 ```sh
 slm-router init                              # writes ./slm-router.toml; refuses to overwrite without --force
                                              # edit [local] and [cloud] models, or use the [[tier]] presets in it
-export OPENAI_API_KEY=sk-...                 # the variable named by [cloud] api_key_env
+export GROQ_API_KEY=gsk_...                  # the variable named by [cloud] api_key_env
 ollama pull llama3.2                         # the example's [local] model
 ```
 
@@ -156,7 +156,7 @@ The [`Dockerfile`](Dockerfile) builds a small Debian image that runs `serve --bi
 
 ```sh
 docker build -t slm-router .
-docker run --rm -p 8080:8080 -e ROUTER_API_KEY=change-me -e OPENAI_API_KEY   --add-host=host.docker.internal:host-gateway   -v "$PWD/slm-router.toml:/etc/slm-router/slm-router.toml:ro" -v slm-router-log:/var/lib/slm-router   slm-router
+docker run --rm -p 8080:8080 -e ROUTER_API_KEY=change-me -e GROQ_API_KEY   --add-host=host.docker.internal:host-gateway   -v "$PWD/slm-router.toml:/etc/slm-router/slm-router.toml:ro" -v slm-router-log:/var/lib/slm-router   slm-router
 ```
 
 No image is published to a registry. For a Linux host, [`contrib/slm-router.service`](contrib/slm-router.service) is an example systemd unit (dynamic user, secrets from `/etc/slm-router/env`); install steps are in its header.
@@ -272,7 +272,7 @@ One run of `python scripts/bench.py --skip-complex` against a release build (`se
 | `local.base_url`, `local.model` | Ollama `/v1`, `llama3.2` | Local target. |
 | `local.first_byte_timeout_ms` | 15000 | Wait before failing over; keep it above a cold model load. |
 | `local.breaker_failures`, `local.breaker_cooldown_ms` | 2, 30000 | Circuit breaker. `0` disables it. |
-| `cloud.base_url`, `cloud.model`, `cloud.api_key_env` | OpenAI, `gpt-6.2-sol` (in the example config), `OPENAI_API_KEY` | Cloud target; the key is read from the named variable. |
+| `cloud.base_url`, `cloud.model`, `cloud.api_key_env` | Groq, `openai/gpt-oss-120b` (in the example config), `GROQ_API_KEY` | Cloud target; the key is read from the named variable. |
 | `routing.local_supports_tools` | `false` | Skip Rule 3 for a local model that handles tools and images. |
 | `routing.local_max_context_tokens` | 4096 | Match Ollama's loaded context. 512 is reserved for the reply. |
 | `routing.complex_prompt_tokens` | 1500 | Rule 5 length trigger. |
@@ -280,7 +280,7 @@ One run of `python scripts/bench.py --skip-complex` against a release build (`se
 | `routing.cue_min_chars` | 0 | Minimum message length for keyword cues to count. |
 | `routing.classifier_threshold` | calibrated (0.78) | Classifier trigger; any value above 1.0 disables it. |
 | `routing.reasoning_cues`, `routing.hint_cues` | built-in lists | Override the keyword cues. |
-| `pricing.input_per_mtok`, `pricing.output_per_mtok` | unset | Cloud prices for `saved_usd`; without them it is `null`. |
+| `pricing.input_per_mtok`, `pricing.output_per_mtok` | unset (example: 0.15, 0.60 for Groq) | Cloud prices for `saved_usd`; without them it is `null`. |
 | `session.ttl_secs`, `session.max_pins` | 300, 10000 | Pin idle TTL (match `OLLAMA_KEEP_ALIVE`) and LRU bound. |
 | `log.path` | `slm-router.jsonl` | Append-only, metadata-only request log. No rotation. Each line also carries `classifier_score`, the Rule 5 probability (null when the classifier is disabled or the prompt is over `complex_prompt_tokens`), for tuning `classifier_threshold` on real traffic. |
 

@@ -97,13 +97,12 @@ breaker_failures = 2
 breaker_cooldown_ms = 30000
 
 [cloud]
-# Any OpenAI-compatible endpoint.
-# gpt-6.2-sol is a reasoning model: clients should omit `temperature` and `top_p`, and send tool
-# calls through /v1/responses rather than chat completions.
-base_url = "https://api.openai.com/v1"
-model = "gpt-6.2-sol"
+# Any OpenAI-compatible endpoint. This form sends Chat Completions tool calls to the cloud, so
+# use one that accepts them; Groq's is live-tested for tools, streaming usage and failover.
+base_url = "https://api.groq.com/openai/v1"
+model = "openai/gpt-oss-120b"
 # Name of the environment variable that holds the cloud API key.
-api_key_env = "OPENAI_API_KEY"
+api_key_env = "GROQ_API_KEY"
 
 [routing]
 # Rules run in order and the first match wins:
@@ -140,8 +139,8 @@ cue_min_chars = 0
 # figure (what a locally served request would have cost on the cloud). Without this table
 # `saved_usd` is null in the log and `n/a` in `slm-router stats`. Set your provider's real prices.
 # [pricing]
-# input_per_mtok = 2.00
-# output_per_mtok = 10.00
+# input_per_mtok = 0.15
+# output_per_mtok = 0.60
 
 [session]
 # A session stays on its target while it is active, which keeps the local prompt cache warm.

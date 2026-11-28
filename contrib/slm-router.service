@@ -2,7 +2,7 @@
 #   sudo install -m 755 slm-router /usr/local/bin/
 #   sudo mkdir -p /etc/slm-router && sudo slm-router init --path /etc/slm-router/slm-router.toml
 #   # set [log] path = "/var/lib/slm-router/slm-router.jsonl" in that file
-#   echo 'OPENAI_API_KEY=sk-...' | sudo tee /etc/slm-router/env && sudo chmod 600 /etc/slm-router/env
+#   echo 'GROQ_API_KEY=gsk_...' | sudo tee /etc/slm-router/env && sudo chmod 600 /etc/slm-router/env
 #   sudo cp slm-router.service /etc/systemd/system/ && sudo systemctl enable --now slm-router
 # Logs from the router itself: journalctl -u slm-router
 [Unit]

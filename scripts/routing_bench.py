@@ -21,7 +21,7 @@ import features as fx
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BENCH = ROOT / "tests" / "fixtures" / "routing_bench.json"
 CONFIG = ROOT / "slm-router.example.toml"
-# Pricing tier for the cost column: the example config's top tier, USD per million tokens.
+# Pricing tier for the cost column: the [[tier]] presets' top tier, USD per million tokens.
 PRICE = ("gpt-6.2-sol", 2.00, 10.00)
 # Assumed reply length; a counterfactual, since nothing is generated here.
 OUT_TOKENS = 300

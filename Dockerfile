@@ -1,5 +1,5 @@
 # Build: docker build -t slm-router .
-# Run:   docker run --rm -p 8080:8080 -e ROUTER_API_KEY=... -e OPENAI_API_KEY=... \
+# Run:   docker run --rm -p 8080:8080 -e ROUTER_API_KEY=... -e GROQ_API_KEY=... \
 #          --add-host=host.docker.internal:host-gateway \
 #          -v "$PWD/slm-router.toml:/etc/slm-router/slm-router.toml:ro" -v slm-router-log:/var/lib/slm-router \
 #          slm-router

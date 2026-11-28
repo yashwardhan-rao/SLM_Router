@@ -25,7 +25,7 @@ Release candidate for 1.0.0. It replaces the 0.7.0, 0.8.0 and 1.0.0 version numb
 - `tests/live_cloud.rs` runs five live checks against local Ollama and a real Groq or OpenAI tier: local routing, forced cloud, streaming with exact usage, tool calling and failover. It is ignored in the offline `cargo test`. On OpenAI (`gpt-6-luna`) the tool-calling case sends `reasoning_effort: "none"`, which that model needs for Chat Completions tools.
 
 ### Changed
-- The example config's cloud model is now `gpt-6.2-sol` instead of `gpt-4o`, which OpenAI retires from the API on 2027-01-14 along with `gpt-4o-mini`.
+- The example config no longer uses `gpt-4o`, which OpenAI retires from the API on 2027-01-14 along with `gpt-4o-mini`. The `[[tier]]` preset's top tier is `gpt-6.2-sol`, and the legacy `[cloud]` section now points at Groq `openai/gpt-oss-120b` ($0.15 / $0.60), because that form sends Chat Completions tool calls to the cloud and Groq is live-verified for them.
 - `stats` and `report` skip log lines whose `v` is not 1 instead of misreading them. Lines without `v` are still read as version 1.
 
 ## [0.6.0] - 2026-11-28
