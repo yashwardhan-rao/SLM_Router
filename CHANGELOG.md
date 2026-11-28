@@ -2,6 +2,11 @@
 
 Notable changes to SLM_Router. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/). Before 1.0.0, a minor version may change defaults or config.
 
+## [0.7.0] - 2026-11-28
+
+### Added
+- `slm-router calibrate --labels FILE`: scores your own prompts labelled `local` or `cloud` with the embedded classifier and suggests a `classifier_threshold` (highest `local` score plus 0.02, the rule the shipped model was calibrated with), with the share of `cloud` prompts rule 5 would then catch. Prompts over `complex_prompt_tokens` are skipped, as rule 5 never scores them. The config is never rewritten.
+
 ## [0.6.0] - 2026-11-28
 
 ### Added
@@ -94,7 +99,8 @@ Notable changes to SLM_Router. The format follows [Keep a Changelog](https://kee
 - One metadata-only JSONL log line per request, and `slm-router stats [--since]`.
 - `slm-router.example.toml`, CI (fmt, clippy, tests) and `scripts/bench.py`.
 
-[Unreleased]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.3.0...v0.4.0

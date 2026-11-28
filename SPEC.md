@@ -108,6 +108,7 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 - Probability: `sigmoid(bias + sparse + dense . w_dense)`.
 - Binary format, little-endian, 65,574 bytes: magic `SLR5`, u16 version (1), u32 bucket count (65536), f32 sparse scale, f32 bias, f32 calibrated threshold, 4 x f32 dense weights, then 65536 x i8 sparse weights (weight = i8 x scale).
 - The threshold is calibrated on the dev split only: the lowest value that sends no easy prompt to cloud, plus 0.02. The holdout split is never used to train or tune.
+- `slm-router calibrate --labels FILE` (v0.7.0) applies the same rule to the user's own prompts. Input is JSONL `{"prompt", "label": "local" | "cloud"}`, other fields ignored, blank lines skipped; a malformed line or unknown label is an error naming its 1-based line. Each prompt is scored as a one-message request, exactly as the log's `classifier_score` (even when the configured threshold disables the classifier). Prompts over `complex_prompt_tokens` are skipped and counted. The suggestion is the highest `local` score plus 0.02, rounded up to 3 decimals; no scored `local` row is an error. It prints the share of `cloud` rows rule 5 catches at that threshold (cues or classifier), notes when the value is above 1.0 (disables the classifier), and warns under 20 `local` rows. It never writes the config and does no I/O beyond reading the two files.
 
 **Policy**
 - Values: `auto` (default), `local-only`, `cloud-only`. Set in config and tightened per request via `X-Router-Policy`. A header can never loosen the config.
@@ -135,7 +136,7 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 
 **Config and CLI**
 - Single TOML file with sections for local, cloud, routing, pricing, session and log. Secrets are never in the file; the config names the env var. Loaded once at startup into typed, validated structs; no hot reload. Invalid config exits non-zero with a clear message.
-- CLI has two subcommands only: `serve` (with `--warmup` and `--bind`) and `stats`.
+- CLI subcommands: `serve` (with `--warmup` and `--bind`), `stats`, and `calibrate --labels FILE` (since v0.7.0).
 - `--warmup` sends one tiny request to the local model at startup.
 
 **Logging and stats**
@@ -174,7 +175,7 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 
 ## Planned for 1.0
 
-This spec describes v1 as two targets; the **Tiers** section records how v0.6.0 generalised them to N cost-ordered tiers. The roadmap in [README.md](README.md#roadmap) continues with `slm-router calibrate` to retrain the classifier on the user's own models (v0.7.0), and install tooling (v0.8.0). Each milestone updates this spec when it lands.
+This spec describes v1 as two targets; the **Tiers** section records how v0.6.0 generalised them to N cost-ordered tiers. The roadmap in [README.md](README.md#roadmap) continues with install tooling (v0.8.0) and stable schemas (v1.0.0); `slm-router calibrate` shipped in v0.7.0 as threshold tuning only (retraining stays in `scripts/train.py`, per-tier thresholds are post-1.0). Each milestone updates this spec when it lands.
 
 ## Further Notes
 
