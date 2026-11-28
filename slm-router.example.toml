@@ -10,6 +10,9 @@
 #
 # Unknown keys are rejected at startup, so a typo fails loudly instead of being ignored.
 
+# Config schema version. 1 is the only one this build reads; leaving it out also means 1.
+version = 1
+
 [server]
 # Address to listen on. Loopback by default. Any other address makes ROUTER_API_KEY mandatory.
 bind = "127.0.0.1:8080"

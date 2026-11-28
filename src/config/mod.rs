@@ -10,6 +10,8 @@ pub use tier::TierCfg;
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    /// Config schema version; absent means 1, the only one this build reads.
+    pub version: Option<i64>,
     #[serde(default)]
     pub server: ServerCfg,
     /// Legacy two-tier form, with `cloud`; desugared by `ladder()`. Exclusive with `tier`.
@@ -133,6 +135,11 @@ impl Default for LogCfg {
 impl Config {
     pub fn from_toml(text: &str) -> Result<Self, String> {
         let mut cfg: Self = toml::from_str(text).map_err(|e| format!("invalid config: {e}"))?;
+        if let Some(v) = cfg.version.filter(|&v| v != 1) {
+            return Err(format!(
+                "invalid config: version {v}; this build reads version 1"
+            ));
+        }
         tier::check(&cfg).map_err(|e| format!("invalid config: {e}"))?;
         cfg.routing.tiers = cfg.tier.iter().map(TierCfg::spec).collect();
         Ok(cfg)

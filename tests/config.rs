@@ -36,6 +36,35 @@ fn policy_and_routing_overrides_are_read() {
 }
 
 #[test]
+fn config_version_is_absent_or_1() {
+    assert_eq!(Config::from_toml(MINIMAL).unwrap().version, None);
+    assert_eq!(
+        Config::from_toml(&format!(
+            "version = 1
+{MINIMAL}"
+        ))
+        .unwrap()
+        .version,
+        Some(1)
+    );
+    let err = Config::from_toml(&format!(
+        "version = 2
+{MINIMAL}"
+    ))
+    .unwrap_err();
+    assert!(
+        err.contains("version 2") && err.contains("version 1"),
+        "{err}"
+    );
+    let err = Config::from_toml(&format!(
+        "version = \"x\"
+{MINIMAL}"
+    ))
+    .unwrap_err();
+    assert!(err.contains("version"), "{err}");
+}
+
+#[test]
 fn unknown_fields_and_missing_sections_are_rejected() {
     let typo = format!("{MINIMAL}\n[session]\nttl_sec = 5\n");
     assert!(Config::from_toml(&typo).is_err());
