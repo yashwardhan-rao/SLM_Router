@@ -36,5 +36,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         # The matrix jobs race to create the release; the loser falls through to upload.
         run: |
-          gh release create "$GITHUB_REF_NAME" --generate-notes 2>/dev/null || true
+          PRERELEASE=""
+          [[ "$GITHUB_REF_NAME" == *-* ]] && PRERELEASE="--prerelease"
+          gh release create "$GITHUB_REF_NAME" --generate-notes $PRERELEASE 2>/dev/null || true
           gh release upload "$GITHUB_REF_NAME" "${{ matrix.asset }}" --clobber
