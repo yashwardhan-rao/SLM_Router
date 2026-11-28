@@ -136,7 +136,7 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 
 **Config and CLI**
 - Single TOML file with an optional top-level `version` (absent or 1; any other value is rejected at load, since v0.9.0-rc.1) and sections for server, local + cloud or `[[tier]]`, routing, pricing, session and log. Secrets are never in the file; the config names the env var. Loaded once at startup into typed, validated structs; no hot reload. Invalid config exits non-zero with a clear message.
-- CLI subcommands: `serve` (with `--warmup` and `--bind`), `stats`, `report [--since] [--json]`, `calibrate --labels FILE` and `init [--path] [--force]` (all since v0.9.0-rc.1), which writes the example config compiled into the binary. It refuses an existing file without `--force`, never creates directories, and writes a temp file in the target's directory that is renamed into place.
+- CLI subcommands: `serve` (with `--warmup` and `--bind`), `stats`, `report [--since] [--json]`, `calibrate --labels FILE`, `route --prompts FILE` and `init [--path] [--force]` (all since v0.9.0-rc.1), which writes the example config compiled into the binary. It refuses an existing file without `--force`, never creates directories, and writes a temp file in the target's directory that is renamed into place.
 - `--warmup` sends one tiny request to the local model at startup.
 
 **Logging and stats**
@@ -144,6 +144,7 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 - Saved USD is the counterfactual cloud cost for requests served locally, using optional configured cloud input/output prices per million tokens. Local cost is treated as zero (electricity and hardware ignored). Null when pricing is absent; cloud-served requests save zero.
 - Metadata only. Never prompt or completion text, never keys. A write failure warns on stderr and never fails the request. No rotation in v1.
 - `stats` aggregates the file: counts by target and by tier, failovers, percent local, tokens kept local, total saved, p50/p95 latency per target, with an optional `--since` window.
+- `route` reads JSONL `{"prompt"}` rows and prints, per row, the tier, target, reason and classifier score a one-message auto request would get, and the median of 11 timings of features + `decide()` + score in microseconds. It calls no upstream and is what `scripts/routing_bench.py` measures.
 - `report` renders the same aggregation as Markdown (overview, latency, reasons, tiers, errors), or as JSON with `--json`. A missing log gives a zero summary. Log lines with a `v` other than 1 are counted as skipped, never misread; a line without `v` is read as version 1.
 
 **Verification**

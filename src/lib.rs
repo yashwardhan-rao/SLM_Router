@@ -6,6 +6,7 @@ pub mod config;
 pub mod errors;
 pub mod init;
 pub mod logging;
+pub mod route;
 pub mod routing;
 pub mod schema;
 pub mod session;

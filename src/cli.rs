@@ -1,4 +1,4 @@
-//! Command line: `serve`, `stats`, `report`, `calibrate` and `init`, nothing else.
+//! Command line: `serve`, `stats`, `report`, `calibrate`, `route` and `init`, nothing else.
 
 use clap::{Parser, Subcommand};
 
@@ -60,6 +60,14 @@ pub enum Command {
         /// this share of cloud prompts local, e.g. 0.05.
         #[arg(long, value_parser = crate::calibrate::fraction)]
         max_false_local: Option<f64>,
+    },
+    /// Print the routing decision and its time for each prompt, offline; no upstream is called.
+    Route {
+        #[arg(long, env = "ROUTER_CONFIG", default_value = "slm-router.toml")]
+        config: String,
+        /// JSONL, one `{"prompt": "..."}` per line; other fields are ignored.
+        #[arg(long)]
+        prompts: String,
     },
     /// Write the documented example config to start from.
     Init {

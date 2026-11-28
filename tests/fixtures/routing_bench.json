@@ -1,0 +1,722 @@
+[
+ {
+  "id": "trivia-00",
+  "category": "trivia",
+  "label": "local",
+  "prompt": "Nairobi is the capital of which country?"
+ },
+ {
+  "id": "trivia-01",
+  "category": "trivia",
+  "label": "local",
+  "prompt": "How many wheels does a tricycle have?"
+ },
+ {
+  "id": "trivia-02",
+  "category": "trivia",
+  "label": "local",
+  "prompt": "Who painted the ceiling of the Sistine Chapel?"
+ },
+ {
+  "id": "trivia-03",
+  "category": "trivia",
+  "label": "local",
+  "prompt": "At what temperature in Fahrenheit does water freeze?"
+ },
+ {
+  "id": "trivia-04",
+  "category": "trivia",
+  "label": "local",
+  "prompt": "Which planet is known as the Red Planet?"
+ },
+ {
+  "id": "trivia-05",
+  "category": "trivia",
+  "label": "local",
+  "prompt": "What language is mostly spoken in Brazil?"
+ },
+ {
+  "id": "trivia-06",
+  "category": "trivia",
+  "label": "local",
+  "prompt": "Why is the sky blue? One sentence is enough."
+ },
+ {
+  "id": "trivia-07",
+  "category": "trivia",
+  "label": "local",
+  "prompt": "Green leaves take in one gas for photosynthesis. Which one?"
+ },
+ {
+  "id": "trivia-08",
+  "category": "trivia",
+  "label": "local",
+  "prompt": "How many continents are there?"
+ },
+ {
+  "id": "trivia-09",
+  "category": "trivia",
+  "label": "local",
+  "prompt": "Spell out the letters in USB."
+ },
+ {
+  "id": "trivia-10",
+  "category": "trivia",
+  "label": "local",
+  "prompt": "Name the tallest mountain in Africa."
+ },
+ {
+  "id": "trivia-11",
+  "category": "trivia",
+  "label": "local",
+  "prompt": "Compare a cat and a dog in one short sentence."
+ },
+ {
+  "id": "trivia-12",
+  "category": "trivia",
+  "label": "cloud",
+  "prompt": "Which two Nobel laureates in chemistry were also awarded a second Nobel Prize, and in which fields was each second prize given?"
+ },
+ {
+  "id": "trivia-13",
+  "category": "trivia",
+  "label": "cloud",
+  "prompt": "Name the treaty that ended the War of the Spanish Succession and list three territorial changes it made."
+ },
+ {
+  "id": "trivia-14",
+  "category": "trivia",
+  "label": "cloud",
+  "prompt": "Who was the head of government of the country that hosted the 1956 Summer Olympics equestrian events, at the time they were held?"
+ },
+ {
+  "id": "trivia-15",
+  "category": "trivia",
+  "label": "cloud",
+  "prompt": "List the first five elements, in order, whose symbols do not start with the first letter of their English names."
+ },
+ {
+  "id": "trivia-16",
+  "category": "trivia",
+  "label": "cloud",
+  "prompt": "What was the original purpose of the building that now houses the Musee d'Orsay, and in which decade did it stop serving that purpose?"
+ },
+ {
+  "id": "trivia-17",
+  "category": "trivia",
+  "label": "cloud",
+  "prompt": "Which composer's ninth symphony premiered in the same decade that the first public railway using steam locomotives opened, and in which city?"
+ },
+ {
+  "id": "trivia-18",
+  "category": "trivia",
+  "label": "cloud",
+  "prompt": "Give the year Ada Lovelace's notes on the Analytical Engine were published and the name of the author whose article she translated."
+ },
+ {
+  "id": "trivia-19",
+  "category": "trivia",
+  "label": "cloud",
+  "prompt": "Which mathematician resolved the Poincare conjecture, which prestigious awards did he decline, and what technique from Hamilton did his proof build on?"
+ },
+ {
+  "id": "trivia-20",
+  "category": "trivia",
+  "label": "cloud",
+  "prompt": "What river forms most of the border between the two countries that fought the Cenepa War, and when was the final peace agreement signed?"
+ },
+ {
+  "id": "trivia-21",
+  "category": "trivia",
+  "label": "cloud",
+  "prompt": "Name three moons of Uranus that are named after characters from Alexander Pope rather than Shakespeare."
+ },
+ {
+  "id": "trivia-22",
+  "category": "trivia",
+  "label": "cloud",
+  "prompt": "Which element was discovered in the same year the Eiffel Tower opened, and who isolated it?"
+ },
+ {
+  "id": "trivia-23",
+  "category": "trivia",
+  "label": "cloud",
+  "prompt": "Who designed the first stored-program computer to run a program in the United Kingdom, and what was its memory technology?"
+ },
+ {
+  "id": "summarization-00",
+  "category": "summarization",
+  "label": "local",
+  "prompt": "Summarize in one sentence: The library will close early on Friday for staff training. Normal hours resume on Saturday."
+ },
+ {
+  "id": "summarization-01",
+  "category": "summarization",
+  "label": "local",
+  "prompt": "Give me a two-word title for this note: Remember to buy milk, eggs and bread on the way home."
+ },
+ {
+  "id": "summarization-02",
+  "category": "summarization",
+  "label": "local",
+  "prompt": "Summarize: Our team met today. We agreed to ship the login page next week and postpone the dashboard."
+ },
+ {
+  "id": "summarization-03",
+  "category": "summarization",
+  "label": "local",
+  "prompt": "TL;DR this email: Hi all, the office kitchen fridge will be cleaned out Thursday at 5pm. Please take home anything you want to keep."
+ },
+ {
+  "id": "summarization-04",
+  "category": "summarization",
+  "label": "local",
+  "prompt": "Shorten this to under ten words: The meeting that was planned for Monday morning has been moved to Tuesday afternoon."
+ },
+ {
+  "id": "summarization-05",
+  "category": "summarization",
+  "label": "local",
+  "prompt": "What is the main point of this sentence: Regular exercise improves sleep quality and reduces stress."
+ },
+ {
+  "id": "summarization-06",
+  "category": "summarization",
+  "label": "local",
+  "prompt": "Summarize this review in three words: The pasta was cold, the service slow, and the bill wrong."
+ },
+ {
+  "id": "summarization-07",
+  "category": "summarization",
+  "label": "local",
+  "prompt": "Turn this into one bullet point: Sales grew 4 percent in March, mostly from online orders."
+ },
+ {
+  "id": "summarization-08",
+  "category": "summarization",
+  "label": "local",
+  "prompt": "Summarize the plot of Little Red Riding Hood in two sentences."
+ },
+ {
+  "id": "summarization-09",
+  "category": "summarization",
+  "label": "local",
+  "prompt": "Condense: The bus to the airport leaves every thirty minutes from stop B, starting at 6am."
+ },
+ {
+  "id": "summarization-10",
+  "category": "summarization",
+  "label": "local",
+  "prompt": "In one line, what is this about: Please update your password before the end of the month to keep access."
+ },
+ {
+  "id": "summarization-11",
+  "category": "summarization",
+  "label": "local",
+  "prompt": "Summarize why the following matters in one sentence: The bridge will close for repairs for two weeks starting Monday."
+ },
+ {
+  "id": "summarization-12",
+  "category": "summarization",
+  "label": "cloud",
+  "prompt": "Summarize the competing arguments in this passage and say which assumption each side relies on: Proponents of a four-day week cite pilot studies showing stable output and lower burnout. Critics note those pilots were voluntary, short, and concentrated in knowledge work, and argue that customer-facing firms would need more staff to keep the same opening hours, raising costs that the pilots never measured."
+ },
+ {
+  "id": "summarization-13",
+  "category": "summarization",
+  "label": "cloud",
+  "prompt": "Write an executive summary for a board, under 120 words, of this incident: A config change at 14:02 doubled connection pool sizes on all API nodes. The database hit its connection cap at 14:09, causing cascading timeouts. Rollback started 14:31 but stale connections persisted until a restart at 15:10. Customer-facing error rate peaked at 38 percent. Root cause was a missing review step for infrastructure config."
+ },
+ {
+  "id": "summarization-14",
+  "category": "summarization",
+  "label": "cloud",
+  "prompt": "Summarize these three abstracts into one paragraph that highlights where they disagree: (1) A meta-analysis of 40 trials finds intermittent fasting matches calorie restriction for weight loss. (2) A 12-month RCT finds no metabolic advantage and higher dropout with fasting. (3) A cohort study links time-restricted eating to better glucose control in shift workers."
+ },
+ {
+  "id": "summarization-15",
+  "category": "summarization",
+  "label": "cloud",
+  "prompt": "Read this contract clause and summarize the risks for the supplier in plain English: The Supplier shall indemnify the Customer against all losses arising from any breach, without limit, including indirect and consequential loss, and the Customer may set off any such amounts against sums otherwise due."
+ },
+ {
+  "id": "summarization-16",
+  "category": "summarization",
+  "label": "cloud",
+  "prompt": "Summarize the key trade-offs a team should weigh before moving from a monolith to microservices, based on this context: 40 engineers, one Postgres database, weekly releases, two teams frequently blocking each other, and on-call already stretched."
+ },
+ {
+  "id": "summarization-17",
+  "category": "summarization",
+  "label": "cloud",
+  "prompt": "Condense this paragraph for a non-technical audience without losing the caveat: The model's accuracy improved from 81 to 87 percent on the benchmark, but the benchmark overlaps with the training data by an unknown amount, so part of the gain may reflect memorisation rather than better generalisation."
+ },
+ {
+  "id": "summarization-18",
+  "category": "summarization",
+  "label": "cloud",
+  "prompt": "Summarize the methodology and the main limitation of this study design: Researchers surveyed 2,000 app users who opted in to a sleep-tracking feature and found that those who used it nightly reported 20 percent better sleep than occasional users."
+ },
+ {
+  "id": "summarization-19",
+  "category": "summarization",
+  "label": "cloud",
+  "prompt": "Produce a timeline summary with dates and the decision made at each point: Jan 3 kickoff chose Kotlin; Feb 14 load test failed, team added caching; Mar 2 security review blocked launch over token storage; Mar 20 storage moved to keychain; Apr 1 launch approved with rate limiting."
+ },
+ {
+  "id": "summarization-20",
+  "category": "summarization",
+  "label": "cloud",
+  "prompt": "Summarize this API changelog for client developers, grouping breaking and non-breaking changes: v3 renames user_id to account_id, removes the legacy XML endpoint, adds optional pagination cursors, raises the default rate limit, and makes the region field required on create calls."
+ },
+ {
+  "id": "summarization-21",
+  "category": "summarization",
+  "label": "cloud",
+  "prompt": "Give a balanced one-paragraph summary of the debate over nuclear power's role in decarbonisation, covering cost, construction time, safety record, waste, and grid reliability."
+ },
+ {
+  "id": "summarization-22",
+  "category": "summarization",
+  "label": "cloud",
+  "prompt": "Summarize the causes of the 2008 financial crisis in five bullet points, distinguishing proximate triggers from structural causes."
+ },
+ {
+  "id": "summarization-23",
+  "category": "summarization",
+  "label": "cloud",
+  "prompt": "Summarize this postmortem into a root-cause statement and three action items: Payments failed for 25 minutes because a certificate on the payment gateway expired. Alerts fired but went to a retired team's channel. Renewal had been manual since the vendor changed in 2023."
+ },
+ {
+  "id": "coding-00",
+  "category": "coding",
+  "label": "local",
+  "prompt": "Write a Python function that returns the square of a number."
+ },
+ {
+  "id": "coding-01",
+  "category": "coding",
+  "label": "local",
+  "prompt": "How can I join a Python list of words into one string separated by spaces?"
+ },
+ {
+  "id": "coding-02",
+  "category": "coding",
+  "label": "local",
+  "prompt": "Write a SQL statement that deletes the row with id 7 from a table named orders."
+ },
+ {
+  "id": "coding-03",
+  "category": "coding",
+  "label": "local",
+  "prompt": "Show the JavaScript line that logs the current date to the console."
+ },
+ {
+  "id": "coding-04",
+  "category": "coding",
+  "label": "local",
+  "prompt": "Write a Python list comprehension that keeps only even numbers from a list called nums."
+ },
+ {
+  "id": "coding-05",
+  "category": "coding",
+  "label": "local",
+  "prompt": "Quick Python question: is `'a' in d` the right way to test for a dict key?"
+ },
+ {
+  "id": "coding-06",
+  "category": "coding",
+  "label": "local",
+  "prompt": "Write a bash command that counts the lines in a file named log.txt."
+ },
+ {
+  "id": "coding-07",
+  "category": "coding",
+  "label": "local",
+  "prompt": "How do I create a new git branch called feature-x?"
+ },
+ {
+  "id": "coding-08",
+  "category": "coding",
+  "label": "local",
+  "prompt": "Convert this Python loop to a list comprehension: result = [] then for x in items: result.append(x * 2)"
+ },
+ {
+  "id": "coding-09",
+  "category": "coding",
+  "label": "local",
+  "prompt": "Can I change a Python tuple after creating it? Yes or no, plus one line why."
+ },
+ {
+  "id": "coding-10",
+  "category": "coding",
+  "label": "local",
+  "prompt": "Write a CSS rule that makes all paragraphs blue."
+ },
+ {
+  "id": "coding-11",
+  "category": "coding",
+  "label": "local",
+  "prompt": "Implement a function in Python that checks whether a string is empty."
+ },
+ {
+  "id": "coding-12",
+  "category": "coding",
+  "label": "cloud",
+  "prompt": "Implement a fixed-capacity ring buffer in Rust that one producer thread and one consumer thread can share without locks."
+ },
+ {
+  "id": "coding-13",
+  "category": "coding",
+  "label": "cloud",
+  "prompt": "Write a thread-safe rate limiter in Go using the token bucket algorithm, allowing bursts up to a configurable capacity, with tests."
+ },
+ {
+  "id": "coding-14",
+  "category": "coding",
+  "label": "cloud",
+  "prompt": "Write a recursive descent parser in Python for arithmetic expressions with +, -, *, /, parentheses and unary minus, returning an AST."
+ },
+ {
+  "id": "coding-15",
+  "category": "coding",
+  "label": "cloud",
+  "prompt": "Implement Dijkstra's algorithm in TypeScript using a binary heap you write yourself, and return both distances and the shortest-path tree."
+ },
+ {
+  "id": "coding-16",
+  "category": "coding",
+  "label": "cloud",
+  "prompt": "Using Postgres window functions, find each product's longest run of consecutive days with zero sales and return its start and end dates."
+ },
+ {
+  "id": "coding-17",
+  "category": "coding",
+  "label": "cloud",
+  "prompt": "Implement a trie in C++ that supports insert, exact search, prefix search and deletion that frees unused nodes."
+ },
+ {
+  "id": "coding-18",
+  "category": "coding",
+  "label": "cloud",
+  "prompt": "Write an async Python crawler that respects robots.txt, limits concurrency per host to two, and retries with exponential backoff."
+ },
+ {
+  "id": "coding-19",
+  "category": "coding",
+  "label": "cloud",
+  "prompt": "Design and implement a consistent hashing ring in Java with virtual nodes and a method to report key movement when a node is added."
+ },
+ {
+  "id": "coding-20",
+  "category": "coding",
+  "label": "cloud",
+  "prompt": "Write a Python decorator that memoizes a function with a time-to-live per entry and a maximum size, evicting the least recently used entry."
+ },
+ {
+  "id": "coding-21",
+  "category": "coding",
+  "label": "cloud",
+  "prompt": "Implement the Raft leader election part of the protocol in Go, including randomized election timeouts and term handling."
+ },
+ {
+  "id": "coding-22",
+  "category": "coding",
+  "label": "cloud",
+  "prompt": "Write a function that merges overlapping intervals in an unsorted list and explain how it handles intervals that only touch at endpoints."
+ },
+ {
+  "id": "coding-23",
+  "category": "coding",
+  "label": "cloud",
+  "prompt": "Implement a bloom filter in Rust with a configurable false-positive rate, computing the bit array size and hash count from it."
+ },
+ {
+  "id": "debugging-00",
+  "category": "debugging",
+  "label": "local",
+  "prompt": "Fix the typo in this Python line: pritn('hello')"
+ },
+ {
+  "id": "debugging-01",
+  "category": "debugging",
+  "label": "local",
+  "prompt": "Why does this fail in Python: if x = 5: print(x)"
+ },
+ {
+  "id": "debugging-02",
+  "category": "debugging",
+  "label": "local",
+  "prompt": "My JavaScript says 'undefined is not a function' when I call myFunc() but I named it myfunc. What is wrong?"
+ },
+ {
+  "id": "debugging-03",
+  "category": "debugging",
+  "label": "local",
+  "prompt": "This Python code gives NameError: name 'cout' is not defined. The line is cout = count + 1. What is the problem?"
+ },
+ {
+  "id": "debugging-04",
+  "category": "debugging",
+  "label": "local",
+  "prompt": "What is wrong with this SQL: SELECT name FROM users WHERE age > 30 ORDER name"
+ },
+ {
+  "id": "debugging-05",
+  "category": "debugging",
+  "label": "local",
+  "prompt": "Python says IndentationError on the line after my if statement. What usually causes that?"
+ },
+ {
+  "id": "debugging-06",
+  "category": "debugging",
+  "label": "local",
+  "prompt": "Fix this JSON: {'name': 'Ana', 'age': 30}"
+ },
+ {
+  "id": "debugging-07",
+  "category": "debugging",
+  "label": "local",
+  "prompt": "My HTML image does not show. The tag is <img scr='cat.png'>. What did I get wrong?"
+ },
+ {
+  "id": "debugging-08",
+  "category": "debugging",
+  "label": "local",
+  "prompt": "Why does '5' + 3 give '53' in JavaScript?"
+ },
+ {
+  "id": "debugging-09",
+  "category": "debugging",
+  "label": "local",
+  "prompt": "The command 'gti status' says command not found. What happened?"
+ },
+ {
+  "id": "debugging-10",
+  "category": "debugging",
+  "label": "local",
+  "prompt": "This Python line raises a SyntaxError: print('total: ' + total"
+ },
+ {
+  "id": "debugging-11",
+  "category": "debugging",
+  "label": "local",
+  "prompt": "Debug this: my CSS color: bleu; does nothing."
+ },
+ {
+  "id": "debugging-12",
+  "category": "debugging",
+  "label": "cloud",
+  "prompt": "My Go service's memory grows steadily under load but pprof shows no large heap objects. Goroutine count also climbs. What are the likely causes and how do I confirm each?"
+ },
+ {
+  "id": "debugging-13",
+  "category": "debugging",
+  "label": "cloud",
+  "prompt": "Intermittently, two concurrent requests both create the same user record even though I check for existence first. The check and insert are in separate queries in Postgres. Explain the race and give two fixes with their trade-offs."
+ },
+ {
+  "id": "debugging-14",
+  "category": "debugging",
+  "label": "cloud",
+  "prompt": "This binary search sometimes loops forever: lo, hi = 0, len(a); while lo < hi: mid = (lo + hi) // 2; if a[mid] < x: lo = mid else: hi = mid. Find the bug and prove the corrected loop terminates."
+ },
+ {
+  "id": "debugging-15",
+  "category": "debugging",
+  "label": "cloud",
+  "prompt": "After upgrading our React app, a component re-renders in an infinite loop. It calls setState inside useEffect with an object dependency created during render. Explain the mechanism and how to restructure it."
+ },
+ {
+  "id": "debugging-16",
+  "category": "debugging",
+  "label": "cloud",
+  "prompt": "Our Kafka consumers occasionally process the same message twice after a rebalance, even with auto-commit disabled. What sequence of events causes this and how do we make processing idempotent?"
+ },
+ {
+  "id": "debugging-17",
+  "category": "debugging",
+  "label": "cloud",
+  "prompt": "A C program works with -O0 but returns garbage with -O2. It reads a struct through a pointer cast from a char buffer. What undefined behaviour is likely involved and how do I fix it portably?"
+ },
+ {
+  "id": "debugging-18",
+  "category": "debugging",
+  "label": "cloud",
+  "prompt": "Latency p99 doubled after we enabled TLS between services, but CPU is flat. Connection counts look normal. What should we investigate, in order, and what would each finding imply?"
+ },
+ {
+  "id": "debugging-19",
+  "category": "debugging",
+  "label": "cloud",
+  "prompt": "Our Rust program deadlocks only in release builds when two threads lock the same pair of mutexes. Explain why the build mode might matter and how to restructure the locking."
+ },
+ {
+  "id": "debugging-20",
+  "category": "debugging",
+  "label": "cloud",
+  "prompt": "A Python asyncio server stops accepting connections after a few hours, with no exceptions logged. Tasks are created with create_task and never awaited. What is going wrong and how do I find it?"
+ },
+ {
+  "id": "debugging-21",
+  "category": "debugging",
+  "label": "cloud",
+  "prompt": "Floating point sums of the same list give different results on two machines in our distributed job. Explain why and how to make the result reproducible."
+ },
+ {
+  "id": "debugging-22",
+  "category": "debugging",
+  "label": "cloud",
+  "prompt": "Our Docker container is OOM-killed at 2 GB although the JVM heap is capped at 1 GB. Where is the rest of the memory going and how do we size the limits?"
+ },
+ {
+  "id": "debugging-23",
+  "category": "debugging",
+  "label": "cloud",
+  "prompt": "A cron job that runs at 02:30 daily ran twice one day and not at all another day. The server uses local time. Explain what happened and how to schedule it safely."
+ },
+ {
+  "id": "reasoning-00",
+  "category": "reasoning",
+  "label": "local",
+  "prompt": "I have 3 apples and buy 2 more. How many apples do I have?"
+ },
+ {
+  "id": "reasoning-01",
+  "category": "reasoning",
+  "label": "local",
+  "prompt": "What is a quarter of 80?"
+ },
+ {
+  "id": "reasoning-02",
+  "category": "reasoning",
+  "label": "local",
+  "prompt": "If today is Monday, what day is it in two days?"
+ },
+ {
+  "id": "reasoning-03",
+  "category": "reasoning",
+  "label": "local",
+  "prompt": "Two meters equals how many centimeters?"
+ },
+ {
+  "id": "reasoning-04",
+  "category": "reasoning",
+  "label": "local",
+  "prompt": "Which is bigger, 0.5 or 0.25?"
+ },
+ {
+  "id": "reasoning-05",
+  "category": "reasoning",
+  "label": "local",
+  "prompt": "A shirt costs 20 dollars and is 10 percent off. What is the sale price?"
+ },
+ {
+  "id": "reasoning-06",
+  "category": "reasoning",
+  "label": "local",
+  "prompt": "How many minutes are there in 3 hours?"
+ },
+ {
+  "id": "reasoning-07",
+  "category": "reasoning",
+  "label": "local",
+  "prompt": "If a train leaves at 3pm and the trip takes 2 hours, when does it arrive?"
+ },
+ {
+  "id": "reasoning-08",
+  "category": "reasoning",
+  "label": "local",
+  "prompt": "Put these in order from smallest to largest: 9, 2, 7, 4."
+ },
+ {
+  "id": "reasoning-09",
+  "category": "reasoning",
+  "label": "local",
+  "prompt": "What is the next number: 2, 4, 6, 8?"
+ },
+ {
+  "id": "reasoning-10",
+  "category": "reasoning",
+  "label": "local",
+  "prompt": "Is 17 an even or odd number?"
+ },
+ {
+  "id": "reasoning-11",
+  "category": "reasoning",
+  "label": "local",
+  "prompt": "Tom is taller than Ann. Ann is taller than Bo. Who is the shortest?"
+ },
+ {
+  "id": "reasoning-12",
+  "category": "reasoning",
+  "label": "cloud",
+  "prompt": "Five people sit in a row. Ana is not at either end. Ben sits immediately to the right of Cai. Dee is at the left end. Eli is two seats from Ana. Give every valid seating."
+ },
+ {
+  "id": "reasoning-13",
+  "category": "reasoning",
+  "label": "cloud",
+  "prompt": "A bag has 4 red and 6 blue marbles. You draw three without replacement. What is the probability of getting at least two red marbles? Show the calculation."
+ },
+ {
+  "id": "reasoning-14",
+  "category": "reasoning",
+  "label": "cloud",
+  "prompt": "Three meetings must be scheduled in five slots. Meeting A must come before B, C cannot be in slot 1 or 5, and B and C cannot be adjacent. How many schedules are possible?"
+ },
+ {
+  "id": "reasoning-15",
+  "category": "reasoning",
+  "label": "cloud",
+  "prompt": "A bat and a ball cost 1.10 in total and the bat costs 1.00 more than the ball. A second pair costs twice as much in total with the same difference. What does each item in the second pair cost?"
+ },
+ {
+  "id": "reasoning-16",
+  "category": "reasoning",
+  "label": "cloud",
+  "prompt": "You can fill a tank with pipe A in 6 hours and pipe B in 4 hours, while drain C empties it in 12 hours. Starting empty with all three open, how long until it is full? Then answer again if C is closed after the first hour."
+ },
+ {
+  "id": "reasoning-17",
+  "category": "reasoning",
+  "label": "cloud",
+  "prompt": "A company's revenue grew 20 percent, then fell 20 percent, then grew 10 percent. Is it above or below where it started, and by exactly how much in percent?"
+ },
+ {
+  "id": "reasoning-18",
+  "category": "reasoning",
+  "label": "cloud",
+  "prompt": "In a tournament every team plays every other team once. There were 66 games in total. How many teams were there, and how many games did each team play?"
+ },
+ {
+  "id": "reasoning-19",
+  "category": "reasoning",
+  "label": "cloud",
+  "prompt": "Knights always tell the truth and knaves always lie. A says 'B is a knave'. B says 'A and C are the same type'. What is C? Explain each case."
+ },
+ {
+  "id": "reasoning-20",
+  "category": "reasoning",
+  "label": "cloud",
+  "prompt": "A loan of 10,000 at 6 percent annual interest compounded monthly is repaid in equal monthly payments over 3 years. What is the monthly payment, to the cent?"
+ },
+ {
+  "id": "reasoning-21",
+  "category": "reasoning",
+  "label": "cloud",
+  "prompt": "Given that it takes 5 machines 5 minutes to make 5 widgets, how long would 100 machines take to make 100 widgets, and how long would 3 machines take to make 9 widgets?"
+ },
+ {
+  "id": "reasoning-22",
+  "category": "reasoning",
+  "label": "cloud",
+  "prompt": "A clock shows 3:15. What is the exact angle between the hour and minute hands, and at what time between 3 and 4 do they first overlap?"
+ },
+ {
+  "id": "reasoning-23",
+  "category": "reasoning",
+  "label": "cloud",
+  "prompt": "Estimate how many piano tuners work in a city of two million people, stating each assumption and showing how the estimate changes if one assumption doubles."
+ }
+]

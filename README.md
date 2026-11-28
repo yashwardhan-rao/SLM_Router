@@ -161,6 +161,31 @@ docker run --rm -p 8080:8080 -e ROUTER_API_KEY=change-me -e OPENAI_API_KEY   --a
 
 No image is published to a registry. For a Linux host, [`contrib/slm-router.service`](contrib/slm-router.service) is an example systemd unit (dynamic user, secrets from `/etc/slm-router/env`); install steps are in its header.
 
+## Routing Benchmark
+
+`python scripts/eval.py --bench` compares three routers on the 120 labelled prompts in `tests/fixtures/routing_bench.json`. The set has 24 prompts in each of trivia, summarization, coding, debugging and multi-step reasoning, with 12 labelled `local` and 12 `cloud` in each category.
+
+- **Held out.** The prompts were written for this benchmark. The script refuses to run if any prompt overlaps the classifier's training corpus or the `routing_eval.json` prompts used to tune it (word-bigram Jaccard 0.5 or more); the current maximum is 0.38. `routing_eval.json` itself was not reused: its 110-prompt dev split chose the shipped threshold and model variant.
+- **The real router.** SLM_Router's column comes from the compiled `--release` binary. `slm-router route` runs the shipped `features()`, `decide()` and classifier with `slm-router.example.toml`, so nothing is reimplemented in Python.
+
+| Router | Routed local | False-local rate | Accuracy | Cost reduction vs always-cloud (raw / misroute-adjusted) | Median routing latency (µs) |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| Always cloud | 0.0% | 0.0% | 50.0% | 0.0% / 0.0% | n/a |
+| Length cutoff tuned on this dataset (local if <= 118 chars) | 53.3% | 8.3% | 95.0% | 52.9% / 48.7% | n/a |
+| Length cutoff tuned on routing_eval.json (local if <= 67 chars) | 29.2% | 0.0% | 79.2% | 28.8% / 28.8% | n/a |
+| SLM_Router (rules + classifier) | 63.3% | 26.7% | 86.7% | 63.0% / 49.6% | 28.9 |
+
+- **What the columns mean.**
+  - False-local rate is the share of `cloud` prompts kept local.
+  - Cost is priced at `gpt-6.2-sol`, $2.00 / $10.00 per million input / output tokens. Input tokens are the router's own estimate, and every request is assumed to produce 300 output tokens.
+  - "Misroute-adjusted" charges each wrongly local prompt again at cloud price, as if it were re-asked.
+  - Routing latency is the median, over prompts, of the median of 11 runs. A run covers feature extraction, the routing decision and the logged classifier score, on a Ryzen 5 7500X3D.
+- **Results.**
+  - SLM_Router routes the most traffic locally and makes the largest raw saving. It beats the length heuristic tuned out of sample on accuracy, at 86.7% against 79.2%.
+  - The cutoff tuned on this same dataset scores higher, but its threshold was chosen on the test data. It also exploits a length gap in these prompts: 66 characters on average for `local`, 177 for `cloud`.
+  - SLM_Router's weakness is short hard prompts with no cue words. Most of its 16 false-local prompts are multi-hop trivia and short logic puzzles, which puts reasoning at 62.5% accuracy and trivia at 79.2%; every other category is at 95.8% or more. Once misroutes are charged back, its saving (49.6%) is close to the in-sample cutoff's (48.7%).
+- **Read with care.** 120 prompts is a small sample, and one person wrote and labelled them all. The labels are a judgement of whether a ~1B local model's answer would usually be acceptable, not judged model output. The prompts are single-turn English, and there are no tools, images or long contexts, where rules 3 and 4 would act.
+
 ## Benchmarks and evaluation
 
 ### Rule 5: keywords (v0.3.0) vs embedded classifier (v0.4.0)
@@ -274,6 +299,8 @@ python scripts/eval.py --log slm-router.jsonl               # live routing eval 
 python scripts/eval.py --log slm-router.jsonl \
   --drill-base http://127.0.0.1:8081/v1 --drill-log dead.jsonl   # also time failover against a router with local down
 python scripts/bench.py --skip-complex                      # v1 local latency benchmark
+python scripts/eval.py --bench                              # offline routing benchmark (see Routing Benchmark)
+slm-router route --prompts FILE [--config FILE]             # routing decision and time per prompt; no upstream call
 ```
 
 **Calibrating the classifier on your own models.** `calibrate` reads JSONL rows of `{"prompt": "...", "label": "local" | "cloud"}`, where `cloud` means your local model's answer was not good enough. It scores each prompt with the embedded classifier, exactly as the router logs `classifier_score`, and suggests the `classifier_threshold` with the best F1 at catching `cloud` prompts. `--min-local-recall 0.95` instead catches the most cloud prompts while keeping at least 95% of local prompts local, and `--max-false-local 0.05` keeps the most local prompts local while letting at most 5% of cloud prompts stay local. Because the suggestion optimises a target rather than keeping every local prompt local, one noisy or mislabelled prompt cannot push it to an extreme. Before the suggestion it prints a table comparing the suggested threshold, the current one, and the strict keep-every-local-prompt threshold (the rule `scripts/train.py` uses), each with local retention, false-local rate and accuracy on your file:
@@ -347,7 +374,8 @@ The shipped corpus has 1,808 synthetic prompts generated by `gemini-3.5-flash-li
 
 ```
 src/
-  main.rs, cli.rs        serve, stats, report, calibrate and init subcommands
+  main.rs, cli.rs        serve, stats, report, calibrate, route and init subcommands
+  route.rs               offline routing decisions for benchmarks
   calibrate.rs, init.rs  classifier_threshold from labelled prompts; example config writer
   config/                typed, validated TOML config; [[tier]] ladder and legacy desugar
   schema.rs, errors.rs   request types and OpenAI-style errors
@@ -357,7 +385,7 @@ src/
   upstream.rs, circuit.rs  upstream HTTP client and local circuit breaker
   tokens.rs              symbol-density token estimate
   logging.rs, stats/     JSONL log; one summary rendered as stats text, Markdown report or JSON
-scripts/                 corpus.py, judge.py, train.py, features.py, eval.py, bench.py
+scripts/                 corpus.py, judge.py, train.py, features.py, eval.py, routing_bench.py, bench.py
 assets/rule5.bin         embedded classifier (65,574 bytes)
 data/                    rule5_prompts.jsonl, rule5_labels.jsonl
 tests/                   integration tests against fake upstreams, eval and parity fixtures

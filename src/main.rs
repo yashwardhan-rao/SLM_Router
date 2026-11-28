@@ -80,6 +80,15 @@ async fn run(cli: Cli) -> Result<(), String> {
             println!("{}", calibrate::render(&out));
             Ok(())
         }
+        Command::Route { config, prompts } => {
+            let text = std::fs::read_to_string(&prompts)
+                .map_err(|e| format!("cannot read {prompts}: {e}"))?;
+            println!(
+                "{}",
+                slm_router::route::run(offline_config(&config)?, &text)?
+            );
+            Ok(())
+        }
         Command::Init { path, force } => {
             slm_router::init::write(std::path::Path::new(&path), force)?;
             println!(

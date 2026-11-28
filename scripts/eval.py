@@ -8,6 +8,7 @@ Standard library only. Requests alternate /v1/chat/completions and /v1/responses
     python scripts/eval.py --log slm-router.jsonl
     python scripts/eval.py --log slm-router.jsonl --drill-base http://127.0.0.1:8081/v1 --drill-log dead.jsonl
                            # also time requests against a second router whose local model is down
+    python scripts/eval.py --bench   # offline: baselines vs the release binary on routing_bench.json
 """
 import argparse
 import json
@@ -167,7 +168,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--base", default="http://127.0.0.1:8080/v1", help="router base URL (default: %(default)s)")
     ap.add_argument("--key", default=os.environ.get("ROUTER_API_KEY"), help="router bearer token (default: $ROUTER_API_KEY)")
-    ap.add_argument("--log", required=True, help="the router's JSONL log, joined by session id")
+    ap.add_argument("--bench", action="store_true", help="offline benchmark instead: scripts/routing_bench.py")
+    ap.add_argument("--log", help="the router's JSONL log, joined by session id (required unless --bench)")
     ap.add_argument("--split", default="all", choices=["all", "dev", "holdout"], help="fixture split to send")
     ap.add_argument("--max-tokens", type=int, default=128, help="reply cap per request (default: %(default)s)")
     ap.add_argument("--timeout", type=float, default=300, help="seconds per request (default: %(default)s)")
@@ -175,6 +177,11 @@ def main():
     ap.add_argument("--drill-log", help="that router's JSONL log")
     ap.add_argument("--drill-n", type=int, default=5, help="drill requests (default: %(default)s)")
     args = ap.parse_args()
+    if args.bench:
+        import routing_bench
+        return routing_bench.main()
+    if not args.log:
+        ap.error("--log is required unless --bench")
     run(args)
     if args.drill_base:
         drill(args)
