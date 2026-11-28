@@ -1,34 +1,30 @@
-//! One upstream call, with the local model gated by the circuit breaker.
+//! One upstream call to a tier, gated by that tier's circuit breaker.
 
 use super::AppState;
-use crate::{
-    routing::Target,
-    upstream::{Api, Opened, Unreachable, open_stream, post_json},
-};
+use crate::upstream::{Api, Opened, Unreachable, open_stream, post_json};
 use serde_json::Value;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-/// Calls `target`; a local behind an open circuit is skipped (`true`) and reported unreachable.
-/// Only real local attempts are recorded; an attempt dropped by a client disconnect never is,
-/// and the breaker's probe lease covers that.
+/// Calls ladder tier `tier`; one behind an open circuit is skipped (`true`) and reported
+/// unreachable. An attempt dropped by a client disconnect is never recorded; the breaker's probe
+/// lease covers that.
 pub async fn attempt(
     s: &AppState,
     body: &mut Value,
     api: Api,
-    target: Target,
+    tier: usize,
 ) -> (Result<Opened, Unreachable>, bool) {
-    if target == Target::Local && !s.breaker.allow(Instant::now()) {
-        return (Err(Unreachable("local circuit open".into())), true);
+    let breaker = &s.breakers[tier];
+    if !breaker.allow(Instant::now()) {
+        return (Err(Unreachable("circuit open".into())), true);
     }
-    let result = call(s, body, api, target).await;
-    if target == Target::Local {
-        s.breaker.record(!local_failed(&result), Instant::now());
-    }
+    let result = call(s, body, api, tier).await;
+    breaker.record(!failed(&result), Instant::now());
     (result, false)
 }
 
-/// Unreachable or 5xx. A 4xx or a stream that dies later means local is alive.
-pub fn local_failed(r: &Result<Opened, Unreachable>) -> bool {
+/// Unreachable or 5xx. A 4xx or a stream that dies later means the tier is alive.
+pub fn failed(r: &Result<Opened, Unreachable>) -> bool {
     match r {
         Ok(Opened::Full(reply)) => reply.status >= 500,
         Ok(Opened::Stream(_)) => false,
@@ -36,29 +32,19 @@ pub fn local_failed(r: &Result<Opened, Unreachable>) -> bool {
     }
 }
 
-pub async fn call(
+async fn call(
     s: &AppState,
     body: &mut Value,
     api: Api,
-    target: Target,
+    tier: usize,
 ) -> Result<Opened, Unreachable> {
-    let (base, key, timeout, model) = match target {
-        Target::Local => {
-            let wait = Duration::from_millis(s.cfg.local.first_byte_timeout_ms);
-            (&s.cfg.local.base_url, None, Some(wait), &s.cfg.local.model)
-        }
-        Target::Cloud => (
-            &s.cfg.cloud.base_url,
-            s.cfg.cloud.api_key.as_deref(),
-            None,
-            &s.cfg.cloud.model,
-        ),
-    };
-    body["model"] = Value::from(model.as_str());
+    let t = &s.ladder[tier];
+    let (key, timeout) = (t.api_key.as_deref(), t.first_byte_timeout());
+    body["model"] = Value::from(t.model.as_str());
     if body["stream"] == true {
-        open_stream(&s.http, base, api, key, body, timeout).await
+        open_stream(&s.http, &t.base_url, api, key, body, timeout).await
     } else {
-        post_json(&s.http, base, api, key, body, timeout)
+        post_json(&s.http, &t.base_url, api, key, body, timeout)
             .await
             .map(Opened::Full)
     }

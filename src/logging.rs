@@ -16,7 +16,10 @@ pub struct Record {
     pub session_id: String,
     pub session_source: SessionSource,
     pub policy: Policy,
+    /// `local` or `cloud`: whether the tier that answered runs on this machine.
     pub target: Target,
+    /// Name of the tier that answered (`local` / `cloud` for the legacy config).
+    pub tier: String,
     pub reason: Reason,
     pub failed_over: bool,
     pub pinned: bool,

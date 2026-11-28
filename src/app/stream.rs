@@ -59,7 +59,9 @@ pub fn relay(
             rec.completion_tokens,
             rec.tokens_estimated,
         ) = (p, c, est);
-        rec.saved_usd = saved_usd(rec.target, s.cfg.pricing, p, c);
+        // Tier names are unique, so the record's name finds the tier that answered.
+        let tier = s.ladder.iter().position(|t| t.name == rec.tier);
+        rec.saved_usd = tier.and_then(|i| saved_usd(&s.ladder, i, p, c));
         rec.total_ms = started.elapsed().as_millis() as u64;
         s.logger.write(&rec);
     });

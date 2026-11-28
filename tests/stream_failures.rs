@@ -12,7 +12,7 @@ async fn stream_fails_over_to_cloud_when_local_is_down_before_the_first_byte() {
         };
         let r = rig(mode, Mode::Sse(&[HELLO, USAGE]), |c| {
             if dead {
-                c.local.base_url = dead_url();
+                c.local.as_mut().unwrap().base_url = dead_url();
             }
         })
         .await;
@@ -29,7 +29,10 @@ async fn stream_fails_over_to_cloud_when_local_is_down_before_the_first_byte() {
 
 #[tokio::test]
 async fn local_only_stream_with_local_down_is_a_503_json_error() {
-    let r = rig(Mode::Ok, Mode::Ok, |c| c.local.base_url = dead_url()).await;
+    let r = rig(Mode::Ok, Mode::Ok, |c| {
+        c.local.as_mut().unwrap().base_url = dead_url()
+    })
+    .await;
     let (status, ctype, body) =
         fetch(&r.base, &stream_req(), &[("x-router-policy", "local-only")]).await;
     assert_eq!(status, 503);

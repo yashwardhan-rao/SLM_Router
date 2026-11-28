@@ -11,7 +11,11 @@ mod target;
 mod telemetry;
 
 use crate::{
-    circuit::Breaker, config::Config, errors::ApiError, logging::Logger, session::PinStore,
+    circuit::Breaker,
+    config::{Config, TierCfg},
+    errors::ApiError,
+    logging::Logger,
+    session::PinStore,
 };
 use axum::{
     Json, Router,
@@ -32,10 +36,16 @@ pub struct AppState {
     pub pins: PinStore,
     pub logger: Logger,
     pub seq: AtomicU64,
-    pub breaker: Breaker,
+    /// The tiers, cheapest first; `cfg.routing.tiers` holds the matching specs.
+    pub ladder: Vec<TierCfg>,
+    /// One per tier, same order as `ladder`.
+    pub breakers: Vec<Breaker>,
 }
 
-pub fn router(cfg: Config) -> Router {
+pub fn router(mut cfg: Config) -> Router {
+    // Desugared here, not at parse time, so changes to `cfg.local` / `cfg.cloud` still apply.
+    let ladder = cfg.ladder();
+    cfg.routing.tiers = ladder.iter().map(TierCfg::spec).collect();
     let body_limit = cfg.server.max_body_bytes;
     let http = reqwest::Client::builder()
         // A provider that stalls (no bytes for this long) ends the request instead of hanging it.
@@ -49,10 +59,14 @@ pub fn router(cfg: Config) -> Router {
         ),
         logger: Logger::new(&cfg.log.path),
         seq: AtomicU64::new(0),
-        breaker: Breaker::new(
-            cfg.local.breaker_failures,
-            Duration::from_millis(cfg.local.breaker_cooldown_ms),
-        ),
+        breakers: ladder
+            .iter()
+            .map(|t| {
+                let cooldown = Duration::from_millis(t.breaker_cooldown_ms);
+                Breaker::new(t.breaker_failures, cooldown)
+            })
+            .collect(),
+        ladder,
         http,
         cfg,
     });
@@ -80,8 +94,17 @@ async fn auth(State(s): State<Arc<AppState>>, req: Request, next: Next) -> Respo
     next.run(req).await
 }
 
-async fn models() -> Json<Value> {
-    let data: Vec<Value> = ["auto", "local", "cloud"]
+/// `auto`, the `local` / `cloud` aliases that have a tier to resolve to, and every tier name.
+async fn models(State(s): State<Arc<AppState>>) -> Json<Value> {
+    let has = |local: bool| s.ladder.iter().any(|t| t.local == local);
+    let aliases = [("auto", true), ("local", has(true)), ("cloud", has(false))];
+    let mut names: Vec<&str> = aliases.iter().filter(|a| a.1).map(|a| a.0).collect();
+    for t in &s.ladder {
+        if !names.contains(&t.name.as_str()) {
+            names.push(&t.name);
+        }
+    }
+    let data: Vec<Value> = names
         .iter()
         .map(|m| json!({"id": format!("slm-router/{m}"), "object": "model", "owned_by": "slm-router"}))
         .collect();

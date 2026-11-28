@@ -1,6 +1,5 @@
-//! In-memory session pins: keep a conversation on one target so the local KV cache stays warm.
+//! In-memory session pins: keep a conversation on one tier so its KV cache stays warm.
 
-use crate::routing::Target;
 use crate::schema::{ChatRequest, text_of};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, VecDeque};
@@ -44,7 +43,7 @@ pub fn session_id(header: Option<&str>, req: &ChatRequest) -> (String, SessionSo
 /// Pin map plus a recency queue; refreshed ids are re-queued and their old queue entries go stale.
 #[derive(Default)]
 struct Pins {
-    map: HashMap<String, (Target, Instant, u64)>,
+    map: HashMap<String, (usize, Instant, u64)>,
     order: VecDeque<(String, u64)>,
     seq: u64,
 }
@@ -69,7 +68,7 @@ impl PinStore {
         self.pins.lock().unwrap().map.len()
     }
 
-    pub fn get(&self, id: &str) -> Option<Target> {
+    pub fn get(&self, id: &str) -> Option<usize> {
         let mut p = self.pins.lock().unwrap_or_else(|e| e.into_inner());
         match p.map.get(id) {
             Some((t, at, _)) if at.elapsed() < self.ttl => Some(*t),
@@ -81,18 +80,16 @@ impl PinStore {
         }
     }
 
-    /// Record a request on `id`: refreshes the TTL, allows local -> cloud, never cloud -> local.
+    /// Record a request on `id` at ladder index `tier`: refreshes the TTL; a pin only moves up.
     /// Eviction and refresh are amortised O(1).
-    pub fn set(&self, id: &str, target: Target) {
+    pub fn set(&self, id: &str, tier: usize) {
         let mut guard = self.pins.lock().unwrap_or_else(|e| e.into_inner());
         let p = &mut *guard;
         p.seq += 1;
         let (now, seq) = (Instant::now(), p.seq);
         match p.map.get_mut(id) {
             Some((cur, at, s)) if at.elapsed() < self.ttl => {
-                if target == Target::Cloud {
-                    *cur = Target::Cloud;
-                }
+                *cur = (*cur).max(tier);
                 (*at, *s) = (now, seq);
             }
             existing => {
@@ -106,7 +103,7 @@ impl PinStore {
                         }
                     }
                 }
-                p.map.insert(id.to_string(), (target, now, seq));
+                p.map.insert(id.to_string(), (tier, now, seq));
             }
         }
         p.order.push_back((id.to_string(), seq));

@@ -2,11 +2,14 @@
 mod fake;
 mod stats;
 mod stream;
+mod tiers;
 pub use fake::*;
 #[allow(unused_imports)] // only the stats test binaries use these helpers
 pub use stats::*;
 #[allow(unused_imports)] // only the streaming test binaries use these helpers
 pub use stream::*;
+#[allow(unused_imports)] // only the tier test binaries use these helpers
+pub use tiers::*;
 
 use serde_json::{Value, json};
 use slm_router::{app, config::Config};
@@ -44,7 +47,7 @@ pub fn config(local: &str, cloud: &str, log: &std::path::Path) -> Config {
         log.to_str().unwrap()
     );
     let mut c = Config::from_toml(&toml).unwrap();
-    c.cloud.api_key = Some("sk-cloud".into());
+    c.cloud.as_mut().unwrap().api_key = Some("sk-cloud".into());
     c
 }
 

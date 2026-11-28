@@ -2,7 +2,7 @@
 
 use crate::logging::{Record, now_ms};
 use crate::routing::{Policy, Reason, Target};
-use crate::{config::Pricing, schema::text_of, session::SessionSource};
+use crate::{config::TierCfg, schema::text_of, session::SessionSource};
 use serde_json::Value;
 
 /// (prompt, completion, estimated). Uses the upstream `usage` when present, else a chars/4 estimate.
@@ -31,20 +31,22 @@ pub fn usage(body: &[u8], est_prompt: usize) -> (u64, u64, bool) {
     }
 }
 
-/// What cloud would have cost for a request served locally. Null when no pricing is configured.
-pub fn saved_usd(
-    target: Target,
-    pricing: Option<Pricing>,
-    prompt: u64,
-    completion: u64,
-) -> Option<f64> {
-    let p = pricing?;
-    Some(match target {
-        Target::Cloud => 0.0,
-        Target::Local => {
-            (prompt as f64 * p.input_per_mtok + completion as f64 * p.output_per_mtok) / 1e6
+/// What the top tier would have cost, minus what `tier` cost. Null when the top tier has no
+/// prices, or a remote tier below it has none; an unpriced local tier costs nothing.
+pub fn saved_usd(ladder: &[TierCfg], tier: usize, prompt: u64, completion: u64) -> Option<f64> {
+    let cost = |t: &TierCfg| match (t.pricing(), t.local) {
+        (Some(p), _) => {
+            Some((prompt as f64 * p.input_per_mtok + completion as f64 * p.output_per_mtok) / 1e6)
         }
-    })
+        (None, true) => Some(0.0),
+        (None, false) => None,
+    };
+    let top = ladder.last()?;
+    top.pricing()?;
+    match tier + 1 == ladder.len() {
+        true => Some(0.0),
+        false => Some(cost(top)? - cost(&ladder[tier])?),
+    }
 }
 
 pub fn new_record(seq: u64, session_id: String, source: SessionSource, policy: Policy) -> Record {
@@ -57,6 +59,7 @@ pub fn new_record(seq: u64, session_id: String, source: SessionSource, policy: P
         session_source: source,
         policy,
         target: Target::Local,
+        tier: String::new(),
         reason: Reason::Default,
         failed_over: false,
         pinned: false,

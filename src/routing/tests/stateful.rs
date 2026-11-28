@@ -14,7 +14,7 @@ fn stateful_goes_to_cloud_even_when_local_supports_tools_and_is_pinned() {
         ..Default::default()
     };
     assert_eq!(
-        decide(&stateful(), &cfg, Policy::Auto, Some(Target::Local)),
+        decide(&stateful(), &cfg, Policy::Auto, Some(0)),
         ok(Target::Cloud, Reason::Stateful)
     );
 }

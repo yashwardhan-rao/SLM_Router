@@ -4,7 +4,10 @@ use serde_json::json;
 
 #[tokio::test]
 async fn refused_local_connection_fails_over_to_cloud() {
-    let r = rig(Mode::Ok, Mode::Ok, |c| c.local.base_url = dead_url()).await;
+    let r = rig(Mode::Ok, Mode::Ok, |c| {
+        c.local.as_mut().unwrap().base_url = dead_url()
+    })
+    .await;
     let (status, body) = post_chat(&r.base, &user("hi"), &[]).await;
     assert_eq!((status, body["model"].as_str()), (200, Some("cloud")));
     assert_eq!(r.cloud.last().body["model"], "cloud-test");
@@ -35,7 +38,10 @@ async fn local_4xx_is_the_clients_error_and_does_not_fail_over() {
 
 #[tokio::test]
 async fn local_only_policy_never_leaks_to_cloud_when_local_is_down() {
-    let r = rig(Mode::Ok, Mode::Ok, |c| c.local.base_url = dead_url()).await;
+    let r = rig(Mode::Ok, Mode::Ok, |c| {
+        c.local.as_mut().unwrap().base_url = dead_url()
+    })
+    .await;
     let (status, body) =
         post_chat(&r.base, &user("hi"), &[("x-router-policy", "local-only")]).await;
     assert_eq!(status, 503);
@@ -45,7 +51,10 @@ async fn local_only_policy_never_leaks_to_cloud_when_local_is_down() {
 
 #[tokio::test]
 async fn forced_local_model_does_not_fail_over() {
-    let r = rig(Mode::Ok, Mode::Ok, |c| c.local.base_url = dead_url()).await;
+    let r = rig(Mode::Ok, Mode::Ok, |c| {
+        c.local.as_mut().unwrap().base_url = dead_url()
+    })
+    .await;
     let mut req = user("hi");
     req["model"] = json!("slm-router/local");
     let (status, _) = post_chat(&r.base, &req, &[]).await;

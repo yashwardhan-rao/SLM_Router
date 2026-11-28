@@ -73,7 +73,7 @@ async fn fifty_concurrent_requests_write_fifty_valid_log_lines() {
 #[tokio::test]
 async fn a_client_that_hangs_up_before_the_first_byte_is_still_logged() {
     let r = rig(Mode::Hang, Mode::Ok, |c| {
-        c.local.first_byte_timeout_ms = 30_000
+        c.local.as_mut().unwrap().first_byte_timeout_ms = 30_000
     })
     .await;
     let client = reqwest::Client::builder()

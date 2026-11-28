@@ -7,7 +7,7 @@ use slm_router::{
     logging, stats,
     upstream::{Api, post_json},
 };
-use std::{process::ExitCode, time::Duration};
+use std::process::ExitCode;
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -28,6 +28,9 @@ async fn run(cli: Cli) -> Result<(), String> {
             warmup,
         } => {
             let cfg = Config::load(&config, bind)?;
+            for w in cfg.warnings() {
+                eprintln!("slm-router: warning: {w}");
+            }
             if warmup {
                 warm_up(&cfg).await;
             }
@@ -61,21 +64,34 @@ async fn run(cli: Cli) -> Result<(), String> {
 }
 
 /// Best effort: a failed warm-up only means the first real request pays the cold load.
+/// Local tiers warm in parallel, each under its own first-byte timeout, so one slow tier
+/// never holds up the others.
 async fn warm_up(cfg: &Config) {
-    let body = json!({"model": cfg.local.model, "max_tokens": 1,
-        "messages": [{"role": "user", "content": "hi"}]});
-    let wait = Some(Duration::from_millis(cfg.local.first_byte_timeout_ms));
-    let r = post_json(
-        &reqwest::Client::new(),
-        &cfg.local.base_url,
-        Api::Chat,
-        None,
-        &body,
-        wait,
-    )
-    .await;
-    match r {
-        Ok(reply) => eprintln!("slm-router: warm-up answered with HTTP {}", reply.status),
-        Err(e) => eprintln!("slm-router: warm-up failed: {}", e.0),
+    let http = reqwest::Client::new();
+    let mut jobs = tokio::task::JoinSet::new();
+    for t in cfg.ladder().into_iter().filter(|t| t.local) {
+        let http = http.clone();
+        jobs.spawn(async move {
+            let body = json!({"model": t.model, "max_tokens": 1,
+                "messages": [{"role": "user", "content": "hi"}]});
+            let wait = t.first_byte_timeout();
+            let r = post_json(
+                &http,
+                &t.base_url,
+                Api::Chat,
+                t.api_key.as_deref(),
+                &body,
+                wait,
+            )
+            .await;
+            match r {
+                Ok(reply) => eprintln!(
+                    "slm-router: warm-up of {} answered with HTTP {}",
+                    t.name, reply.status
+                ),
+                Err(e) => eprintln!("slm-router: warm-up of {} failed: {}", t.name, e.0),
+            }
+        });
     }
+    jobs.join_all().await;
 }

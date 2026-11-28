@@ -4,13 +4,20 @@ use crate::routing::{Policy, RoutingConfig};
 use serde::Deserialize;
 use std::net::SocketAddr;
 
+mod tier;
+pub use tier::TierCfg;
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default)]
     pub server: ServerCfg,
-    pub local: LocalCfg,
-    pub cloud: CloudCfg,
+    /// Legacy two-tier form, with `cloud`; desugared by `ladder()`. Exclusive with `tier`.
+    pub local: Option<LocalCfg>,
+    pub cloud: Option<CloudCfg>,
+    /// The ladder, cheapest first.
+    #[serde(default)]
+    pub tier: Vec<TierCfg>,
     #[serde(default)]
     pub routing: RoutingConfig,
     pub pricing: Option<Pricing>,
@@ -66,11 +73,11 @@ fn default_first_byte_ms() -> u64 {
     15_000
 }
 
-fn default_breaker_failures() -> u32 {
+pub(crate) fn default_breaker_failures() -> u32 {
     2
 }
 
-fn default_breaker_cooldown_ms() -> u64 {
+pub(crate) fn default_breaker_cooldown_ms() -> u64 {
     30_000
 }
 
@@ -85,7 +92,7 @@ pub struct CloudCfg {
     pub api_key: Option<String>,
 }
 
-/// USD per 1M tokens for the cloud model; used for the counterfactual saving.
+/// USD per 1M tokens; used for the counterfactual saving against the top tier.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Pricing {
@@ -125,7 +132,10 @@ impl Default for LogCfg {
 
 impl Config {
     pub fn from_toml(text: &str) -> Result<Self, String> {
-        toml::from_str(text).map_err(|e| format!("invalid config: {e}"))
+        let mut cfg: Self = toml::from_str(text).map_err(|e| format!("invalid config: {e}"))?;
+        tier::check(&cfg).map_err(|e| format!("invalid config: {e}"))?;
+        cfg.routing.tiers = cfg.tier.iter().map(TierCfg::spec).collect();
+        Ok(cfg)
     }
 
     /// Read, apply env secrets and an optional bind override, then validate.
@@ -143,7 +153,12 @@ impl Config {
     pub fn resolve_secrets(&mut self, env: impl Fn(&str) -> Option<String>) {
         // An empty variable (`KEY=` in a .env template) counts as unset, never as an empty secret.
         let env = |k: &str| env(k).filter(|v| !v.is_empty());
-        self.cloud.api_key = env(&self.cloud.api_key_env);
+        if let Some(c) = &mut self.cloud {
+            c.api_key = env(&c.api_key_env);
+        }
+        for t in &mut self.tier {
+            t.api_key = t.api_key_env.as_deref().and_then(env);
+        }
         self.server.api_key = env("ROUTER_API_KEY");
     }
 

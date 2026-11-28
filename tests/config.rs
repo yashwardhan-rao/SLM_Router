@@ -16,7 +16,7 @@ fn minimal_config_gets_spec_defaults() {
     let c = Config::from_toml(MINIMAL).unwrap();
     assert_eq!(c.server.bind, "127.0.0.1:8080");
     assert_eq!(c.server.policy, Policy::Auto);
-    assert_eq!(c.local.first_byte_timeout_ms, 15000);
+    assert_eq!(c.local.as_ref().unwrap().first_byte_timeout_ms, 15000);
     assert_eq!(c.session.ttl_secs, 300);
     assert_eq!(c.session.max_pins, 10_000);
     assert_eq!(c.routing.complex_prompt_tokens, 1500);
@@ -60,7 +60,10 @@ fn secrets_come_from_the_environment_never_the_file() {
         "ROUTER_API_KEY" => Some("router".into()),
         _ => None,
     });
-    assert_eq!(c.cloud.api_key.as_deref(), Some("sk-cloud"));
+    assert_eq!(
+        c.cloud.as_ref().unwrap().api_key.as_deref(),
+        Some("sk-cloud")
+    );
     assert_eq!(c.server.api_key.as_deref(), Some("router"));
 }
 
@@ -78,7 +81,7 @@ fn max_body_bytes_defaults_to_64_mib_and_is_configurable() {
 fn empty_secret_env_vars_count_as_unset() {
     let mut c = Config::from_toml(MINIMAL).unwrap();
     c.resolve_secrets(|_| Some(String::new()));
-    assert_eq!((c.cloud.api_key, c.server.api_key), (None, None));
+    assert_eq!((c.cloud.unwrap().api_key, c.server.api_key), (None, None));
 }
 
 #[test]

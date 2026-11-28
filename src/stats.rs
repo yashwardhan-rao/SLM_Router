@@ -21,6 +21,9 @@ struct Rec {
     outcome: String,
     #[serde(default)]
     tokens_estimated: bool,
+    /// Absent before v0.6.0, when `target` was the tier.
+    #[serde(default)]
+    tier: Option<String>,
 }
 
 fn unknown() -> String {
@@ -134,6 +137,12 @@ pub fn report(log: impl BufRead, now_ms: u64, since: Option<Duration>) -> String
         out.push(format!(
             "reasons: {}",
             counts(recs.iter().map(|r| r.reason.as_str()))
+        ));
+        let tier = |r: &&Rec| r.tier.clone().unwrap_or_else(|| r.target.clone());
+        let tiers: Vec<String> = recs.iter().map(tier).collect();
+        out.push(format!(
+            "tiers: {}",
+            counts(tiers.iter().map(String::as_str))
         ));
     }
     // A client hanging up is not the router's or upstream's failure; it gets its own line.

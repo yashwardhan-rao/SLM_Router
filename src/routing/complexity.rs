@@ -20,6 +20,9 @@ pub struct RoutingConfig {
     pub complexity_threshold: u32,
     /// Classifier probability at which rule 5 sends the request to the cloud; above 1.0 disables it.
     pub classifier_threshold: f32,
+    /// The ladder from `[[tier]]`, filled in by the config loader; empty means the legacy form.
+    #[serde(skip)]
+    pub tiers: Vec<super::TierSpec>,
 }
 
 const REASONING: &str = "prove, show that, derive, justify, step by step, analyze, analyse,     refactor, trade off, counterexample, induction";
@@ -42,6 +45,7 @@ impl Default for RoutingConfig {
             hint_cues: list(HINTS),
             complexity_threshold: 2,
             classifier_threshold: classifier::model().threshold,
+            tiers: Vec::new(),
         }
     }
 }

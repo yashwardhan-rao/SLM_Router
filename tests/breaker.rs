@@ -6,7 +6,7 @@ use std::time::Duration;
 /// Router whose local always answers 503; the breaker opens after 2 failures for 200ms.
 async fn dead_local() -> Rig {
     rig(Mode::Status(503, "{}"), Mode::Ok, |c| {
-        c.local.breaker_cooldown_ms = 200;
+        c.local.as_mut().unwrap().breaker_cooldown_ms = 200;
     })
     .await
 }
