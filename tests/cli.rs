@@ -66,6 +66,21 @@ fn calibrate_takes_config_and_requires_labels() {
 }
 
 #[test]
+fn init_defaults_to_local_config_without_force() {
+    let Command::Init { path, force } = parse(&["init"]).unwrap().command else {
+        panic!("expected init")
+    };
+    assert_eq!((path.as_str(), force), ("slm-router.toml", false));
+    let Command::Init { path, force } = parse(&["init", "--path", "x.toml", "--force"])
+        .unwrap()
+        .command
+    else {
+        panic!("expected init")
+    };
+    assert_eq!((path.as_str(), force), ("x.toml", true));
+}
+
+#[test]
 fn unknown_or_missing_subcommands_fail() {
     assert!(parse(&["explode"]).is_err());
     assert!(parse(&[]).is_err());

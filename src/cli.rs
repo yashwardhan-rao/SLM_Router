@@ -1,4 +1,4 @@
-//! Command line: `serve`, `stats` and `calibrate`, nothing else.
+//! Command line: `serve`, `stats`, `calibrate` and `init`, nothing else.
 
 use clap::{Parser, Subcommand};
 
@@ -41,5 +41,13 @@ pub enum Command {
         /// JSONL, one `{"prompt": "...", "label": "local" | "cloud"}` per line.
         #[arg(long)]
         labels: String,
+    },
+    /// Write the documented example config to start from.
+    Init {
+        #[arg(long, default_value = "slm-router.toml")]
+        path: String,
+        /// Overwrite an existing file.
+        #[arg(long)]
+        force: bool,
     },
 }

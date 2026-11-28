@@ -1,6 +1,6 @@
 # SLM_Router example configuration.
 #
-# Copy to slm-router.toml (the default location), or point at a file with
+# `slm-router init` writes this file to ./slm-router.toml. Or copy it there, or point at a file with
 #   slm-router serve --config path/to/file.toml
 #   ROUTER_CONFIG=path/to/file.toml slm-router serve
 #
@@ -34,12 +34,49 @@ request_stream_usage = true
 # breaker_failures (0 disables), breaker_cooldown_ms. With [[tier]], the [routing] keys
 # local_supports_tools and local_max_context_tokens are ignored; set them on each tier.
 #
+# Presets to copy from. Every price is USD per million tokens and only a placeholder: providers
+# change prices often, so check their pricing pages before trusting `saved_usd`.
+#
+# # Local Ollama (free; an unpriced local tier costs zero)
 # [[tier]]
 # name = "small"
 # base_url = "http://127.0.0.1:11434/v1"
 # model = "llama3.2"
 # local = true
 # max_context_tokens = 4096
+#
+# # Groq (OpenAI-compatible)
+# [[tier]]
+# name = "groq"
+# base_url = "https://api.groq.com/openai/v1"
+# model = "llama-3.3-70b-versatile"
+# api_key_env = "GROQ_API_KEY"
+# supports_tools = true
+# input_per_mtok = 0.59
+# output_per_mtok = 0.79
+#
+# # Anthropic, through its OpenAI-compatible endpoint
+# [[tier]]
+# name = "claude"
+# base_url = "https://api.anthropic.com/v1"
+# model = "claude-haiku-5-5"
+# api_key_env = "ANTHROPIC_API_KEY"
+# supports_tools = true
+# hard = true
+# input_per_mtok = 1.00
+# output_per_mtok = 5.00
+#
+# # OpenAI (the top tier: stateful, so /v1/responses chains work)
+# [[tier]]
+# name = "openai"
+# base_url = "https://api.openai.com/v1"
+# model = "gpt-4o"
+# api_key_env = "OPENAI_API_KEY"
+# supports_tools = true
+# stateful = true
+# hard = true
+# input_per_mtok = 2.50
+# output_per_mtok = 10.00
 
 [local]
 # Any OpenAI-compatible endpoint. Ollama serves one under /v1.

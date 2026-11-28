@@ -69,6 +69,13 @@ async fn run(cli: Cli) -> Result<(), String> {
             );
             Ok(())
         }
+        Command::Init { path, force } => {
+            slm_router::init::write(std::path::Path::new(&path), force)?;
+            println!(
+                "wrote {path}: set your models and api_key_env, then run `slm-router serve --config {path}`"
+            );
+            Ok(())
+        }
     }
 }
 

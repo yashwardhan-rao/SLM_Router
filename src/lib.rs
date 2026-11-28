@@ -4,6 +4,7 @@ pub mod circuit;
 pub mod cli;
 pub mod config;
 pub mod errors;
+pub mod init;
 pub mod logging;
 pub mod routing;
 pub mod schema;
