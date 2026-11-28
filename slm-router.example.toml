@@ -37,8 +37,8 @@ request_stream_usage = true
 # breaker_failures (0 disables), breaker_cooldown_ms. With [[tier]], the [routing] keys
 # local_supports_tools and local_max_context_tokens are ignored; set them on each tier.
 #
-# Presets to copy from. Every price is USD per million tokens and only a placeholder: providers
-# change prices often, so check their pricing pages before trusting `saved_usd`.
+# Presets to copy from. Prices are USD per million tokens, standard tier, as listed on each
+# provider's pricing page on 2026-11-28. Providers change prices: check before trusting `saved_usd`.
 #
 # # Local Ollama (free; an unpriced local tier costs zero)
 # [[tier]]
@@ -48,38 +48,36 @@ request_stream_usage = true
 # local = true
 # max_context_tokens = 4096
 #
-# # Groq (OpenAI-compatible)
+# # Groq (OpenAI-compatible; console.groq.com/docs/models)
 # [[tier]]
 # name = "groq"
 # base_url = "https://api.groq.com/openai/v1"
-# model = "llama-3.3-70b-versatile"
+# model = "openai/gpt-oss-120b"
 # api_key_env = "GROQ_API_KEY"
 # supports_tools = true
-# input_per_mtok = 0.59
-# output_per_mtok = 0.79
+# input_per_mtok = 0.15
+# output_per_mtok = 0.60
 #
-# # Anthropic, through its OpenAI-compatible endpoint
-# [[tier]]
-# name = "claude"
-# base_url = "https://api.anthropic.com/v1"
-# model = "claude-haiku-5-5"
-# api_key_env = "ANTHROPIC_API_KEY"
-# supports_tools = true
-# hard = true
-# input_per_mtok = 1.00
-# output_per_mtok = 5.00
-#
-# # OpenAI (the top tier: stateful, so /v1/responses chains work)
+# # OpenAI (the top tier: stateful, so /v1/responses chains work; developers.openai.com/api/docs/pricing)
+# # gpt-6.2-sol is a reasoning model: clients should omit `temperature` and `top_p`, and send tool
+# # calls through /v1/responses rather than chat completions.
 # [[tier]]
 # name = "openai"
 # base_url = "https://api.openai.com/v1"
-# model = "gpt-4o"
+# model = "gpt-6.2-sol"
 # api_key_env = "OPENAI_API_KEY"
 # supports_tools = true
 # stateful = true
 # hard = true
-# input_per_mtok = 2.50
+# input_per_mtok = 2.00
 # output_per_mtok = 10.00
+#
+# Anthropic has no preset yet. Its OpenAI-compatible endpoint (https://api.anthropic.com/v1) takes
+# the Bearer key and the stream_options the router sends, but it has no /v1/responses, rejects
+# n > 1, `response_format` other than strict json_schema, and on current models any temperature
+# below 1 or a non-default top_p (400, relayed to the client). A key not scoped to a workspace
+# also needs an `anthropic-workspace-id` header, which tiers cannot set. Many OpenAI clients send
+# temperature, so an auto-routed request could fail there and nowhere else.
 
 [local]
 # Any OpenAI-compatible endpoint. Ollama serves one under /v1.
@@ -99,8 +97,10 @@ breaker_cooldown_ms = 30000
 
 [cloud]
 # Any OpenAI-compatible endpoint.
+# gpt-6.2-sol is a reasoning model: clients should omit `temperature` and `top_p`, and send tool
+# calls through /v1/responses rather than chat completions.
 base_url = "https://api.openai.com/v1"
-model = "gpt-4o"
+model = "gpt-6.2-sol"
 # Name of the environment variable that holds the cloud API key.
 api_key_env = "OPENAI_API_KEY"
 
@@ -139,7 +139,7 @@ cue_min_chars = 0
 # figure (what a locally served request would have cost on the cloud). Without this table
 # `saved_usd` is null in the log and `n/a` in `slm-router stats`. Set your provider's real prices.
 # [pricing]
-# input_per_mtok = 2.50
+# input_per_mtok = 2.00
 # output_per_mtok = 10.00
 
 [session]

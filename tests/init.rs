@@ -79,5 +79,5 @@ async fn the_generated_config_routes_against_fake_upstreams() {
     .await;
     assert_eq!(status, 200);
     assert_eq!(cloud.count(), 1);
-    assert_eq!(cloud.last().body["model"], "gpt-4o");
+    assert_eq!(cloud.last().body["model"], "gpt-6.2-sol");
 }
