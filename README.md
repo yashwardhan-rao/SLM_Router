@@ -318,7 +318,7 @@ Completed work is ticked below. The full release history is in [CHANGELOG.md](CH
 - [x] v0.3.0: density token estimate, Rule 5 scoring, reply reserve, local circuit breaker
 - [x] v0.4.0: embedded Rule 5 classifier trained on judged synthetic prompts
 - [x] v0.5.0: exact streaming token counts, `classifier_score` in the log, `stats` by reason and outcome
-- [x] v0.6.0 (unreleased): N tiers, `[[tier]]` config, failover and pins up the ladder, `tier` in the log
+- [x] v0.6.0: N tiers, `[[tier]]` config, failover and pins up the ladder, `tier` in the log
 
 **Where 1.0 is headed.** One binary. Point your OpenAI SDK at it. It answers easy prompts with your local model, sends hard ones to the cheapest cloud model that can handle them, never lets private prompts leave your machine, and shows how much you saved.
 

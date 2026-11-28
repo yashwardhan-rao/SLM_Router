@@ -2,7 +2,7 @@
 
 Notable changes to SLM_Router. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/). Before 1.0.0, a minor version may change defaults or config.
 
-## [Unreleased]
+## [0.6.0] - 2026-11-28
 
 ### Added
 - N tiers: a `[[tier]]` list of any number of OpenAI-compatible upstreams, cheapest first, each with `local`, `supports_tools`, `max_context_tokens`, `stateful`, `hard`, optional prices, a first-byte timeout and its own circuit breaker. Each request goes to the cheapest tier the policy allows that passes the stateful, capability, context and Rule 5 checks.
@@ -10,6 +10,7 @@ Notable changes to SLM_Router. The format follows [Keep a Changelog](https://kee
 - `tier` field in every log line (the serving tier's name) and a `tiers:` line in `stats`.
 - `tier_unavailable` routing reason, for a remote tier that was unreachable or answered 5xx and was failed over.
 - Config checks: prices must be >= 0, and a tier sets both prices or neither.
+- Startup warnings, never fatal: `[routing] local_supports_tools` / `local_max_context_tokens` set with `[[tier]]` (they are ignored; set `supports_tools` / `max_context_tokens` on each tier), and a cheaper tier priced above the top tier (its `saved_usd` would be negative).
 
 ### Changed
 - Failover and pins move up the ladder only. A failed-over request logs the first hop's reason.
@@ -93,7 +94,8 @@ Notable changes to SLM_Router. The format follows [Keep a Changelog](https://kee
 - One metadata-only JSONL log line per request, and `slm-router stats [--since]`.
 - `slm-router.example.toml`, CI (fmt, clippy, tests) and `scripts/bench.py`.
 
-[Unreleased]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.2.0...v0.3.0
