@@ -1,0 +1,26 @@
+# Example systemd unit. Install:
+#   sudo install -m 755 slm-router /usr/local/bin/
+#   sudo mkdir -p /etc/slm-router && sudo slm-router init --path /etc/slm-router/slm-router.toml
+#   # set [log] path = "/var/lib/slm-router/slm-router.jsonl" in that file
+#   echo 'OPENAI_API_KEY=sk-...' | sudo tee /etc/slm-router/env && sudo chmod 600 /etc/slm-router/env
+#   sudo cp slm-router.service /etc/systemd/system/ && sudo systemctl enable --now slm-router
+# Logs from the router itself: journalctl -u slm-router
+[Unit]
+Description=SLM_Router OpenAI-compatible local/cloud LLM router
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/slm-router serve --config /etc/slm-router/slm-router.toml
+EnvironmentFile=/etc/slm-router/env
+DynamicUser=yes
+StateDirectory=slm-router
+WorkingDirectory=/var/lib/slm-router
+Restart=on-failure
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

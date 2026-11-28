@@ -1,0 +1,12 @@
+# Build context: Cargo.toml, Cargo.lock, src/, assets/, slm-router.example.toml (all embedded or
+# compiled), plus tests/ for the test-only include_str! fixtures. Everything else stays out.
+target/
+data/
+scripts/
+graphify-out/
+.git/
+.github/
+*.jsonl
+slm-router.toml
+.env
+.env.*

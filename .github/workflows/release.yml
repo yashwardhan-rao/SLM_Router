@@ -18,6 +18,9 @@ jobs:
           - os: windows-latest
             asset: slm-router-windows-x86_64.exe
             bin: slm-router.exe
+          - os: macos-latest
+            asset: slm-router-macos-aarch64
+            bin: slm-router
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +34,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        # The two matrix jobs race to create the release; the loser falls through to upload.
+        # The matrix jobs race to create the release; the loser falls through to upload.
         run: |
           gh release create "$GITHUB_REF_NAME" --generate-notes 2>/dev/null || true
           gh release upload "$GITHUB_REF_NAME" "${{ matrix.asset }}" --clobber
