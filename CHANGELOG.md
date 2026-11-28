@@ -1,6 +1,17 @@
 # Changelog
 
-Notable changes to SLM_Router. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/). Before 1.0.0, a minor version may change defaults or config.
+Notable changes to SLM_Router. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/). From 1.0.0 on, the surface listed under Stability in [SPEC.md](SPEC.md) only changes in a major version; before 1.0.0 a minor version could change defaults or config.
+
+## [1.0.0] - 2026-11-28
+
+### Added
+- `slm-router report [--since] [--json]` prints the log summary as a Markdown report (overview, latency, reasons, tiers, errors), or with `--json` as JSON (schema version 1) for scripts. It uses the same aggregation as `stats`, so the numbers always match. A missing log gives a zero summary.
+- Optional top-level config `version`. Absent or `1` is accepted, and any other value is rejected at startup with a clear message. The example config now sets `version = 1`.
+- SPEC lists the stable 1.x surface: the endpoints, config schema 1, log schema 1 (its 21 fields, reasons and outcomes, pinned by a test), `report --json` schema 1, the CLI and `decide()`.
+
+### Changed
+- `stats` and `report` skip log lines whose `v` is not 1 instead of misreading them. Lines without `v` are still read as version 1.
+- Semantic versioning applies from this release.
 
 ## [0.8.0] - 2026-11-28
 
@@ -107,7 +118,8 @@ Notable changes to SLM_Router. The format follows [Keep a Changelog](https://kee
 - One metadata-only JSONL log line per request, and `slm-router stats [--since]`.
 - `slm-router.example.toml`, CI (fmt, clippy, tests) and `scripts/bench.py`.
 
-[Unreleased]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/yashwardhan-rao/SLM_Router/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.8.0...v1.0.0
 [0.8.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.5.0...v0.6.0

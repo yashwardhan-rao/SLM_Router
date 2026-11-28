@@ -6,7 +6,7 @@ Developers who run a local Ollama model and also pay for a cloud model send ever
 
 ## Solution
 
-SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client points any OpenAI SDK at it and calls `/v1/chat/completions` as normal. The router picks between exactly two targets: one local Ollama model and one cloud model, both reached over OpenAI-compatible `/v1/chat/completions`, so there is no provider translation. The choice comes from a small ordered set of cheap heuristics and a privacy policy. A session that has started on a target stays pinned to it so warm caches are reused. Every request appends one metadata-only line to a local JSONL log, and a `stats` command reports latency and the cloud spend avoided. There is no UI, database, or background service. The whole project is checked by one fast, offline command.
+SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client points any OpenAI SDK at it and calls `/v1/chat/completions` as normal. The router picks between a local Ollama model and a cloud model (since v0.6.0, any cost-ordered ladder of OpenAI-compatible tiers), all reached over OpenAI-compatible `/v1`, so there is no provider translation. The choice comes from a small ordered set of cheap heuristics and a privacy policy. A session that has started on a target stays pinned to it so warm caches are reused. Every request appends one metadata-only line to a local JSONL log, and the `stats` and `report` commands report latency and the cloud spend avoided. There is no UI, database, or background service. The whole project is checked by one fast, offline command.
 
 ## User Stories
 
@@ -85,8 +85,8 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 - Saved USD is the top tier's cost minus the serving tier's. An unpriced local tier costs zero; an unpriced remote tier, or an unpriced top tier, gives null.
 
 **Targets and model field**
-- v1 has two targets, `local` and `cloud`, each with a base URL and a model name from config. Since v0.6.0 they are the legacy form of a tier ladder; see **Tiers** below.
-- The client's `model` is rewritten to the chosen target's model. Reserved values: `slm-router/local`, `slm-router/cloud`, `slm-router/auto`. Any other value means auto. The model list endpoint returns the three reserved ids.
+- The original two targets, `local` and `cloud`, each with a base URL and a model name from config, are since v0.6.0 the legacy form of a tier ladder; see **Tiers** above. Both forms are supported in 1.x.
+- The client's `model` is rewritten to the chosen target's model. Reserved values: `slm-router/local`, `slm-router/cloud`, `slm-router/auto`. Any other value means auto. The model list endpoint returns `slm-router/auto`, the aliases that resolve, and every tier name.
 
 **Routing core (pure, no I/O)**
 - One function takes request features, effective policy and session state and returns a decision (target plus a named reason). Rules are ordered, first match wins:
@@ -135,8 +135,8 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 - Optional bearer token protects the router. Cloud keys are read from the environment variable named in config. The client's Authorization header is never forwarded upstream.
 
 **Config and CLI**
-- Single TOML file with sections for local, cloud, routing, pricing, session and log. Secrets are never in the file; the config names the env var. Loaded once at startup into typed, validated structs; no hot reload. Invalid config exits non-zero with a clear message.
-- CLI subcommands: `serve` (with `--warmup` and `--bind`), `stats`, `calibrate --labels FILE` (since v0.7.0), and `init [--path] [--force]` (since v0.8.0), which writes the example config compiled into the binary. It refuses an existing file without `--force`, never creates directories, and writes a temp file in the target's directory that is renamed into place.
+- Single TOML file with an optional top-level `version` (absent or 1; any other value is rejected at load, since v1.0.0) and sections for server, local + cloud or `[[tier]]`, routing, pricing, session and log. Secrets are never in the file; the config names the env var. Loaded once at startup into typed, validated structs; no hot reload. Invalid config exits non-zero with a clear message.
+- CLI subcommands: `serve` (with `--warmup` and `--bind`), `stats`, `report [--since] [--json]` (since v1.0.0), `calibrate --labels FILE` (since v0.7.0), and `init [--path] [--force]` (since v0.8.0), which writes the example config compiled into the binary. It refuses an existing file without `--force`, never creates directories, and writes a temp file in the target's directory that is renamed into place.
 - `--warmup` sends one tiny request to the local model at startup.
 
 **Logging and stats**
@@ -144,6 +144,7 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 - Saved USD is the counterfactual cloud cost for requests served locally, using optional configured cloud input/output prices per million tokens. Local cost is treated as zero (electricity and hardware ignored). Null when pricing is absent; cloud-served requests save zero.
 - Metadata only. Never prompt or completion text, never keys. A write failure warns on stderr and never fails the request. No rotation in v1.
 - `stats` aggregates the file: counts by target and by tier, failovers, percent local, tokens kept local, total saved, p50/p95 latency per target, with an optional `--since` window.
+- `report` (v1.0.0) renders the same aggregation as Markdown (overview, latency, reasons, tiers, errors), or as JSON with `--json`. A missing log gives a zero summary. Log lines with a `v` other than 1 are counted as skipped, never misread; a line without `v` is read as version 1.
 
 **Verification**
 - The single fast check is `cargo clippy --all-targets -- -D warnings && cargo test`. It needs no network and no Ollama.
@@ -156,8 +157,19 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 - **Secondary seam:** direct unit tests of the pure routing function, one or more per rule, including rule precedence and policy conflicts.
 - Acceptance coverage: each routing rule; forced model and policy conflicts; local-down failover (refused, 5xx, first-byte timeout); local-only returns 503; cloud 429 passthrough; mid-stream upstream death; client disconnect cancels the upstream; stream and non-stream parity; the models endpoint; router auth and the non-loopback refusal; pin sticking, expiring, escalating and never downgrading; pin table eviction; unknown-field passthrough; client Authorization never forwarded; log line contents and absence of bodies and keys; stats totals and percentiles; missing pricing yields null; log write failure does not fail the request; invalid config fails startup.
 - Timing-sensitive tests (timeouts, TTL) use short configured values or a paused tokio clock, never real sleeps of seconds.
-- Prior art: none. The repository has no code yet, so these tests establish the pattern.
+- Shared helpers live in `tests/common/` (fake upstreams that can refuse, hang, error, stream slowly or die mid-stream, a router rig, log readers); new tests reuse them.
 - A manual smoke test against real Ollama and a real cloud key is documented but is not part of the fast check.
+
+## Stability (v1.0.0)
+
+From 1.0.0 the project follows semver. Within 1.x the following are stable. They may gain optional additions, but they never lose a field or change meaning without a major version:
+
+- **HTTP:** `POST /v1/chat/completions`, `POST /v1/responses`, `GET /v1/models`, the reserved model ids, the `X-Session-Id` and `X-Router-Policy` headers, and the OpenAI error body shape.
+- **Config schema version 1:** every key documented in `slm-router.example.toml`, in both the legacy and the `[[tier]]` form. A config that declares another `version` is rejected.
+- **Log schema version 1:** exactly these fields, pinned by `tests/log_schema.rs`: `v`, `ts`, `request_id`, `session_id`, `session_source`, `policy`, `target`, `tier`, `reason`, `failed_over`, `pinned`, `stream`, `status`, `outcome`, `ttfb_ms`, `total_ms`, `prompt_tokens`, `completion_tokens`, `tokens_estimated`, `saved_usd`, `classifier_score`. Reasons: `forced`, `policy`, `stateful`, `pinned`, `capability`, `context`, `complexity`, `classifier`, `default`, `local_unavailable`, `tier_unavailable`, `circuit_open`. Outcomes: `ok`, `upstream_error`, `client_disconnect`, `stream_error`. Adding a field or value bumps `v`.
+- **`report --json` schema version 1:** the summary object (`v`, `requests`, `local`, `cloud`, `failovers`, `pct_local`, `tokens_kept_local`, `saved_usd`, `latency_ms.{local,cloud}.{p50,p95}`, `reasons`, `tiers`, `errors` as `[{name, count}]`, `client_disconnects`, `tokens_estimated`, `skipped_lines`).
+- **CLI:** the subcommands and flags above. The `stats` text and the Markdown `report` are for people, not for parsing; scripts should use `--json`.
+- **Library:** `decide()` and its input and output types.
 
 ## Out of Scope
 
@@ -173,9 +185,14 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 - A published client SDK (the importable routing function is the only library surface).
 - Counting electricity or hardware cost in savings.
 
-## Planned for 1.0
+## Road to 1.0 (done)
 
-This spec describes v1 as two targets; the **Tiers** section records how v0.6.0 generalised them to N cost-ordered tiers. The roadmap in [README.md](README.md#roadmap) continues with stable schemas (v1.0.0); install tooling shipped in v0.8.0, and `slm-router calibrate` shipped in v0.7.0 as threshold tuning only (retraining stays in `scripts/train.py`, per-tier thresholds are post-1.0). Each milestone updates this spec when it lands.
+- v0.6.0 generalised the two targets to N cost-ordered tiers.
+- v0.7.0 added `slm-router calibrate`, which tunes the threshold only; retraining stays in `scripts/train.py`.
+- v0.8.0 added `init` and the install tooling.
+- v1.0.0 froze the schemas above and added `report`.
+
+Per-tier thresholds, speculative verification, a multi-turn classifier and a semantic cache come after 1.0, and only as opt-in features.
 
 ## Further Notes
 
