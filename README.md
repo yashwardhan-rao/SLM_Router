@@ -192,6 +192,24 @@ Why the dollars did not move: most of the raw saving the keyword router appeared
 
 One live run of the release binary against Ollama 0.40.18 (`llama3.2:1b` local, `qwen2.5-coder:7b` standing in for cloud): 4 requests, 3 of them streamed, all with `tokens_estimated: false`. Before v0.5.0 every streamed chat request was estimated, because neither Ollama nor OpenAI send usage on a stream unless asked. Clients that did not set `include_usage` received no `choices: []` chunk. A CUDA prompt with no cue words went to cloud with `classifier_score` 0.942; "hi" scored 0.339.
 
+### v1.0.0: sample `slm-router report`
+
+Smoke test of the 1.0.0 release binary against Ollama 0.40.18: one auto request ("What is the capital of France?") and one forced to `slm-router/cloud`, with `qwen2.5-coder:7b` on Ollama standing in for the cloud and placeholder prices of $2.50 / $10.00 per million tokens. The excerpt below is `slm-router report --since 1h`; the full output adds reason and tier tables, and `report --json` gives the same numbers as JSON.
+
+| Metric | Value |
+| :--- | ---: |
+| Requests | 2 (local 1, cloud 1) |
+| Routed local | 50.0% |
+| Failovers | 0 |
+| Tokens kept local | 40 |
+| Saved USD | 0.000160 |
+| Tokens estimated | 0 of 2 |
+
+| Target | p50 ms | p95 ms |
+| :--- | ---: | ---: |
+| local (`llama3.2:1b`) | 52 | 52 |
+| cloud stand-in (`qwen2.5-coder:7b`) | 4449 | 4449 |
+
 ### v1 local benchmark
 
 One run of `python scripts/bench.py --skip-complex` against a release build (`serve --warmup`, auto policy). Numbers are from `slm-router stats` and the request log.
