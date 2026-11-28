@@ -145,3 +145,8 @@ pub fn classifier_score(f: &Features, cfg: &RoutingConfig) -> Option<f32> {
     }
     complexity::score_of(&f.last_user_text, cfg)
 }
+
+/// Whether rule 5's keyword cues alone would send this message to the cloud.
+pub fn cued(text: &str, cfg: &RoutingConfig) -> bool {
+    complexity::cued(text, cfg)
+}

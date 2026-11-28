@@ -56,7 +56,17 @@ fn stats_takes_config_and_since() {
 }
 
 #[test]
-fn only_serve_and_stats_exist() {
+fn calibrate_takes_config_and_requires_labels() {
+    let cli = parse(&["calibrate", "--labels", "f.jsonl", "--config", "c.toml"]).unwrap();
+    let Command::Calibrate { config, labels } = cli.command else {
+        panic!("expected calibrate")
+    };
+    assert_eq!((config.as_str(), labels.as_str()), ("c.toml", "f.jsonl"));
+    assert!(parse(&["calibrate"]).is_err());
+}
+
+#[test]
+fn unknown_or_missing_subcommands_fail() {
     assert!(parse(&["explode"]).is_err());
     assert!(parse(&[]).is_err());
 }

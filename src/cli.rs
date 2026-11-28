@@ -1,4 +1,4 @@
-//! Command line: `serve` and `stats`, nothing else.
+//! Command line: `serve`, `stats` and `calibrate`, nothing else.
 
 use clap::{Parser, Subcommand};
 
@@ -33,5 +33,13 @@ pub enum Command {
         /// Only include requests newer than this, e.g. `24h`.
         #[arg(long)]
         since: Option<String>,
+    },
+    /// Suggest a Rule 5 `classifier_threshold` from your own labelled prompts.
+    Calibrate {
+        #[arg(long, env = "ROUTER_CONFIG", default_value = "slm-router.toml")]
+        config: String,
+        /// JSONL, one `{"prompt": "...", "label": "local" | "cloud"}` per line.
+        #[arg(long)]
+        labels: String,
     },
 }

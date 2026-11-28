@@ -1,7 +1,7 @@
 use clap::Parser;
 use serde_json::json;
 use slm_router::{
-    app,
+    app, calibrate,
     cli::{Cli, Command},
     config::Config,
     logging, stats,
@@ -44,10 +44,7 @@ async fn run(cli: Cli) -> Result<(), String> {
         }
         Command::Stats { config, since } => {
             let since = since.as_deref().map(stats::parse_duration).transpose()?;
-            // Only the log path is needed; serve-only checks (bind, ROUTER_API_KEY) do not apply.
-            let text = std::fs::read_to_string(&config)
-                .map_err(|e| format!("cannot read {config}: {e}"))?;
-            let cfg = Config::from_toml(&text)?;
+            let cfg = offline_config(&config)?;
             match std::fs::File::open(&cfg.log.path) {
                 Ok(f) => {
                     let log = std::io::BufReader::new(f);
@@ -60,7 +57,25 @@ async fn run(cli: Cli) -> Result<(), String> {
             }
             Ok(())
         }
+        Command::Calibrate { config, labels } => {
+            let cfg = offline_config(&config)?;
+            let text = std::fs::read_to_string(&labels)
+                .map_err(|e| format!("cannot read {labels}: {e}"))?;
+            let rows = calibrate::parse(&text)?;
+            let out = calibrate::threshold(&rows, &cfg.routing)?;
+            println!(
+                "{}",
+                calibrate::render(&out, cfg.routing.classifier_threshold)
+            );
+            Ok(())
+        }
     }
+}
+
+/// Config for the offline commands: serve-only checks (bind, ROUTER_API_KEY) do not apply.
+fn offline_config(path: &str) -> Result<Config, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?;
+    Config::from_toml(&text)
 }
 
 /// Best effort: a failed warm-up only means the first real request pays the cold load.

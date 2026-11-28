@@ -124,6 +124,11 @@ pub(super) fn rule5(text: &str, est_prompt_tokens: usize, cfg: &RoutingConfig) -
         .then_some(Reason::Classifier)
 }
 
+/// Whether rule 5's keyword cues alone send this message to the cloud.
+pub(super) fn cued(text: &str, cfg: &RoutingConfig) -> bool {
+    text.chars().count() > cfg.cue_min_chars && raw_score(text, cfg) >= cfg.complexity_threshold
+}
+
 /// The classifier's probability for `text`, or None when it is disabled (threshold above 1).
 pub(super) fn classifier_prob(text: &str, cue: u32, cfg: &RoutingConfig) -> Option<f32> {
     // Trained on single messages: it sees the last message's tokens, not the whole conversation's.
