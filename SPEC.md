@@ -136,7 +136,7 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 
 **Config and CLI**
 - Single TOML file with sections for local, cloud, routing, pricing, session and log. Secrets are never in the file; the config names the env var. Loaded once at startup into typed, validated structs; no hot reload. Invalid config exits non-zero with a clear message.
-- CLI subcommands: `serve` (with `--warmup` and `--bind`), `stats`, and `calibrate --labels FILE` (since v0.7.0).
+- CLI subcommands: `serve` (with `--warmup` and `--bind`), `stats`, `calibrate --labels FILE` (since v0.7.0), and `init [--path] [--force]` (since v0.8.0), which writes the example config compiled into the binary. It refuses an existing file without `--force`, never creates directories, and writes a temp file in the target's directory that is renamed into place.
 - `--warmup` sends one tiny request to the local model at startup.
 
 **Logging and stats**
@@ -169,13 +169,13 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 - Prometheus or other metrics endpoints.
 - Embeddings, legacy completions and other OpenAI endpoints besides chat completions and the models list.
 - Log rotation, log shipping, persistent pins.
-- Windows-service packaging and installers (Docker and a systemd example are planned for v0.8.0).
+- Windows-service packaging, installers and published container images (a `Dockerfile` and an example systemd unit ship in the repo since v0.8.0).
 - A published client SDK (the importable routing function is the only library surface).
 - Counting electricity or hardware cost in savings.
 
 ## Planned for 1.0
 
-This spec describes v1 as two targets; the **Tiers** section records how v0.6.0 generalised them to N cost-ordered tiers. The roadmap in [README.md](README.md#roadmap) continues with install tooling (v0.8.0) and stable schemas (v1.0.0); `slm-router calibrate` shipped in v0.7.0 as threshold tuning only (retraining stays in `scripts/train.py`, per-tier thresholds are post-1.0). Each milestone updates this spec when it lands.
+This spec describes v1 as two targets; the **Tiers** section records how v0.6.0 generalised them to N cost-ordered tiers. The roadmap in [README.md](README.md#roadmap) continues with stable schemas (v1.0.0); install tooling shipped in v0.8.0, and `slm-router calibrate` shipped in v0.7.0 as threshold tuning only (retraining stays in `scripts/train.py`, per-tier thresholds are post-1.0). Each milestone updates this spec when it lands.
 
 ## Further Notes
 

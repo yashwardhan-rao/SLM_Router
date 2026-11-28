@@ -2,6 +2,14 @@
 
 Notable changes to SLM_Router. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/). Before 1.0.0, a minor version may change defaults or config.
 
+## [0.8.0] - 2026-11-28
+
+### Added
+- `slm-router init [--path FILE] [--force]` writes the documented example config, which is compiled into the binary. It refuses to overwrite an existing file without `--force`, and writes through a temp file in the same directory so a failed write never leaves half a config.
+- `[[tier]]` presets in the example config for local Ollama, Groq, Anthropic's OpenAI-compatible endpoint and OpenAI, with placeholder prices to check against each provider.
+- macOS (Apple silicon) binary `slm-router-macos-aarch64` on each release.
+- `Dockerfile` (non-root Debian image, `serve --bind 0.0.0.0:8080`) and `contrib/slm-router.service`, an example systemd unit. No image is published.
+
 ## [0.7.0] - 2026-11-28
 
 ### Added
@@ -99,7 +107,8 @@ Notable changes to SLM_Router. The format follows [Keep a Changelog](https://kee
 - One metadata-only JSONL log line per request, and `slm-router stats [--since]`.
 - `slm-router.example.toml`, CI (fmt, clippy, tests) and `scripts/bench.py`.
 
-[Unreleased]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.4.0...v0.5.0
