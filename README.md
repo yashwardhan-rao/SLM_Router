@@ -166,7 +166,7 @@ No image is published to a registry. For a Linux host, [`contrib/slm-router.serv
 `python scripts/eval.py --bench` compares three routers on the 120 labelled prompts in `tests/fixtures/routing_bench.json`. The set has 24 prompts in each of trivia, summarization, coding, debugging and multi-step reasoning, with 12 labelled `local` and 12 `cloud` in each category.
 
 - **Held out.** The prompts were written for this benchmark. The script refuses to run if any prompt overlaps the classifier's training corpus or the `routing_eval.json` prompts used to tune it (word-bigram Jaccard 0.5 or more); the current maximum is 0.38. `routing_eval.json` itself was not reused: its 110-prompt dev split chose the shipped threshold and model variant.
-- **The real router.** SLM_Router's column comes from the compiled `--release` binary. `slm-router route` runs the shipped `features()`, `decide()` and classifier with `slm-router.example.toml`, so nothing is reimplemented in Python.
+- **The real router.** SLM_Router's column comes from the compiled `--release` binary. The hidden `slm-router route` subcommand runs the shipped `features()`, `decide()` and classifier with `slm-router.example.toml`, so nothing is reimplemented in Python.
 
 | Router | Routed local | False-local rate | Accuracy | Cost reduction vs always-cloud (raw / misroute-adjusted) | Median routing latency (µs) |
 | :--- | ---: | ---: | ---: | ---: | ---: |
@@ -300,7 +300,7 @@ python scripts/eval.py --log slm-router.jsonl \
   --drill-base http://127.0.0.1:8081/v1 --drill-log dead.jsonl   # also time failover against a router with local down
 python scripts/bench.py --skip-complex                      # v1 local latency benchmark
 python scripts/eval.py --bench                              # offline routing benchmark (see Routing Benchmark)
-slm-router route --prompts FILE [--config FILE]             # routing decision and time per prompt; no upstream call
+slm-router route --prompts FILE [--config FILE]             # hidden, unstable: routing decision and time per prompt, for --bench
 ```
 
 **Calibrating the classifier on your own models.** `calibrate` reads JSONL rows of `{"prompt": "...", "label": "local" | "cloud"}`, where `cloud` means your local model's answer was not good enough. It scores each prompt with the embedded classifier, exactly as the router logs `classifier_score`, and suggests the `classifier_threshold` with the best F1 at catching `cloud` prompts. `--min-local-recall 0.95` instead catches the most cloud prompts while keeping at least 95% of local prompts local, and `--max-false-local 0.05` keeps the most local prompts local while letting at most 5% of cloud prompts stay local. Because the suggestion optimises a target rather than keeping every local prompt local, one noisy or mislabelled prompt cannot push it to an extreme. Before the suggestion it prints a table comparing the suggested threshold, the current one, and the strict keep-every-local-prompt threshold (the rule `scripts/train.py` uses), each with local retention, false-local rate and accuracy on your file:

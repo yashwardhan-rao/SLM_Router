@@ -20,7 +20,7 @@ Release candidate for 1.0.0. It replaces the 0.7.0, 0.8.0 and 1.0.0 version numb
 - macOS (Apple silicon) binary `slm-router-macos-aarch64` on each release.
 - `Dockerfile` (non-root Debian image, `serve --bind 0.0.0.0:8080`) and `contrib/slm-router.service`, an example systemd unit. No image is published.
 - SPEC lists the surface planned to be stable from 1.0.0: the endpoints, config schema 1, log schema 1 (its 21 fields, reasons and outcomes, pinned by a test), `report --json` schema 1, the CLI and the `decide()` signature.
-- `slm-router route --prompts FILE` prints the routing decision (tier, target, reason, classifier score) and its time in microseconds for each prompt, offline, with the same code a served request runs.
+- A hidden `slm-router route --prompts FILE` (not in `--help`, not covered by the stability promise) prints the routing decision (tier, target, reason, classifier score) and its time in microseconds for each prompt, offline, with the same code a served request runs.
 - `python scripts/eval.py --bench` (`scripts/routing_bench.py`): a held-out 120-prompt routing benchmark (`tests/fixtures/routing_bench.json`). It compares always-cloud, two length cutoffs and the release binary on local share, false-local rate, accuracy, cost reduction and routing latency, after a leakage check against the training and tuning prompts. Results are in the README.
 - `tests/live_cloud.rs` runs five live checks against local Ollama and a real Groq or OpenAI tier: local routing, forced cloud, streaming with exact usage, tool calling and failover. It is ignored in the offline `cargo test`. On OpenAI (`gpt-6-luna`) the tool-calling case sends `reasoning_effort: "none"`, which that model needs for Chat Completions tools.
 

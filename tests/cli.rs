@@ -116,3 +116,17 @@ fn unknown_or_missing_subcommands_fail() {
     assert!(parse(&["explode"]).is_err());
     assert!(parse(&[]).is_err());
 }
+
+#[test]
+fn route_works_but_is_hidden_from_help() {
+    let cli = parse(&["route", "--prompts", "p.jsonl"]).unwrap();
+    assert!(matches!(cli.command, Command::Route { .. }));
+    use clap::CommandFactory;
+    let help = Cli::command().render_help().to_string();
+    // A listed command is an indented line starting with its name ("router" in the about text is not).
+    let listed = |name: &str| {
+        help.lines()
+            .any(|l| l.trim_start().starts_with(&format!("{name} ")))
+    };
+    assert!(listed("calibrate") && !listed("route"), "{help}");
+}

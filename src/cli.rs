@@ -62,6 +62,8 @@ pub enum Command {
         max_false_local: Option<f64>,
     },
     /// Print the routing decision and its time for each prompt, offline; no upstream is called.
+    /// Hidden: a benchmarking aid for `scripts/eval.py --bench`, outside the stable CLI.
+    #[command(hide = true)]
     Route {
         #[arg(long, env = "ROUTER_CONFIG", default_value = "slm-router.toml")]
         config: String,
