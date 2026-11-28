@@ -27,6 +27,20 @@ max_body_bytes = 67108864
 # is hidden from clients that did not ask for it. Set false if an upstream rejects stream_options.
 request_stream_usage = true
 
+# Two-tier form: one [local] and one [cloud] section, shown below. For more than two upstreams,
+# replace [local], [cloud] and [pricing] with a [[tier]] list, cheapest first (README has a full
+# example). Per tier: name, base_url, model, api_key_env, local, supports_tools,
+# max_context_tokens, stateful, hard, input_per_mtok + output_per_mtok, first_byte_timeout_ms,
+# breaker_failures (0 disables), breaker_cooldown_ms. With [[tier]], the [routing] keys
+# local_supports_tools and local_max_context_tokens are ignored; set them on each tier.
+#
+# [[tier]]
+# name = "small"
+# base_url = "http://127.0.0.1:11434/v1"
+# model = "llama3.2"
+# local = true
+# max_context_tokens = 4096
+
 [local]
 # Any OpenAI-compatible endpoint. Ollama serves one under /v1.
 base_url = "http://127.0.0.1:11434/v1"

@@ -4,6 +4,19 @@ Notable changes to SLM_Router. The format follows [Keep a Changelog](https://kee
 
 ## [Unreleased]
 
+### Added
+- N tiers: a `[[tier]]` list of any number of OpenAI-compatible upstreams, cheapest first, each with `local`, `supports_tools`, `max_context_tokens`, `stateful`, `hard`, optional prices, a first-byte timeout and its own circuit breaker. Each request goes to the cheapest tier the policy allows that passes the stateful, capability, context and Rule 5 checks.
+- `slm-router/<tier name>` forces a tier; `/v1/models` lists every tier name.
+- `tier` field in every log line (the serving tier's name) and a `tiers:` line in `stats`.
+- `tier_unavailable` routing reason, for a remote tier that was unreachable or answered 5xx and was failed over.
+- Config checks: prices must be >= 0, and a tier sets both prices or neither.
+
+### Changed
+- Failover and pins move up the ladder only. A failed-over request logs the first hop's reason.
+- `serve --warmup` warms every local tier in parallel.
+- `slm-router/local` or `slm-router/cloud` with no matching tier returns 400 `model_not_found` instead of routing automatically.
+- The legacy `[local]` + `[cloud]` config keeps working unchanged as a two-tier ladder named `local` and `cloud`; the log's `target` field still says `local` or `cloud`.
+
 ## [0.5.0] - 2026-11-26
 
 ### Added

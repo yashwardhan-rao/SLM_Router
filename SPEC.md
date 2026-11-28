@@ -75,8 +75,17 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 - Both upstreams are OpenAI-compatible `/v1/chat/completions`: Ollama's OpenAI endpoint and any OpenAI-compatible cloud endpoint (OpenAI, Groq, or Anthropic's compatibility endpoint). No request or response translation.
 - Unknown request fields are preserved and forwarded. Known fields the router reads (model, messages, stream, tools, tool_choice, response_format) are typed.
 
+**Tiers (v0.6.0)**
+- `[[tier]]` entries form a ladder in config order, cheapest first; it is never re-sorted. Each tier has a name, base URL, model, optional key env var, and flags: `local` (on this machine), `supports_tools`, `max_context_tokens`, `stateful` (keeps `/v1/responses` state), `hard` (may take prompts Rule 5 calls hard), optional input/output prices (both or neither, >= 0), first-byte timeout (default 15000 for local tiers, none otherwise) and its own circuit breaker (`breaker_failures` default 2, 0 disables; `breaker_cooldown_ms` default 30000).
+- The legacy `[local]` + `[cloud]` form desugars to a two-tier ladder named `local` and `cloud` with v0.5.0 behaviour: cloud supports tools, any context, stateful and hard, uses `[pricing]`, and has no breaker. The two forms cannot be mixed.
+- Routing picks the cheapest tier the policy allows (`local-only`: local tiers, `cloud-only`: the rest) that passes, in order, the stateful, capability, context and Rule 5 checks. The logged reason is the first check the cheapest allowed tier fails. If no tier passes all, Rule 5 is dropped and then capability, taking the highest tier left; if none can serve the stateful and context needs, 400. A policy that allows no tier is a policy conflict, and one that allows exactly one tier logs `policy`.
+- `slm-router/<name>` forces a tier. `slm-router/local` and `slm-router/cloud` force the cheapest local or non-local tier, unless a tier has that name, and return 400 `model_not_found` when there is no such tier. `/v1/models` lists `auto`, the aliases that resolve, and every tier name.
+- Pins store a tier and only move up. A request below its pin goes to the cheapest tier at or above the pin that can serve it, or ignores the pin when none can.
+- Failover (not for forced requests) walks up to the next allowed tier that can serve the request, preferring one with the needed capabilities. The logged reason is the first hop's: `circuit_open`, `local_unavailable` (local tier unreachable or 5xx) or `tier_unavailable` (remote tier). With nothing left above, an open circuit or a dead local tier returns 503; a remote tier's own reply is relayed, or 502 if unreachable.
+- Saved USD is the top tier's cost minus the serving tier's. An unpriced local tier costs zero; an unpriced remote tier, or an unpriced top tier, gives null.
+
 **Targets and model field**
-- Exactly two targets: `local` and `cloud`, each with a base URL and a model name from config.
+- v1 has two targets, `local` and `cloud`, each with a base URL and a model name from config. Since v0.6.0 they are the legacy form of a tier ladder; see **Tiers** below.
 - The client's `model` is rewritten to the chosen target's model. Reserved values: `slm-router/local`, `slm-router/cloud`, `slm-router/auto`. Any other value means auto. The model list endpoint returns the three reserved ids.
 
 **Routing core (pure, no I/O)**
@@ -130,10 +139,10 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 - `--warmup` sends one tiny request to the local model at startup.
 
 **Logging and stats**
-- Append-only JSONL, one line per request, schema version 1. Fields: timestamp, request id, session id, session source, policy, target, reason, failed-over flag, pinned flag, stream flag, returned status, outcome (ok, upstream_error, client_disconnect, stream_error), TTFB ms, total ms, prompt tokens, completion tokens, tokens-estimated flag, saved USD, and (additive, still version 1) the Rule 5 classifier score for the last user message to 3 decimals, null when the classifier is disabled or the prompt is over `complex_prompt_tokens` (rule 5 never scores those).
+- Append-only JSONL, one line per request, schema version 1. Fields: timestamp, request id, session id, session source, policy, target (`local` or `cloud`: whether the serving tier is local), tier (its name; additive in v0.6.0, still version 1), reason, failed-over flag, pinned flag, stream flag, returned status, outcome (ok, upstream_error, client_disconnect, stream_error), TTFB ms, total ms, prompt tokens, completion tokens, tokens-estimated flag, saved USD, and (additive, still version 1) the Rule 5 classifier score for the last user message to 3 decimals, null when the classifier is disabled or the prompt is over `complex_prompt_tokens` (rule 5 never scores those).
 - Saved USD is the counterfactual cloud cost for requests served locally, using optional configured cloud input/output prices per million tokens. Local cost is treated as zero (electricity and hardware ignored). Null when pricing is absent; cloud-served requests save zero.
 - Metadata only. Never prompt or completion text, never keys. A write failure warns on stderr and never fails the request. No rotation in v1.
-- `stats` aggregates the file: counts by target, failovers, percent local, tokens kept local, total saved, p50/p95 latency per target, with an optional `--since` window.
+- `stats` aggregates the file: counts by target and by tier, failovers, percent local, tokens kept local, total saved, p50/p95 latency per target, with an optional `--since` window.
 
 **Verification**
 - The single fast check is `cargo clippy --all-targets -- -D warnings && cargo test`. It needs no network and no Ollama.
@@ -153,7 +162,6 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 
 - Any frontend, dashboard or UI.
 - ONNX classifier, semantic response cache, and Stage 3 speculative verification or quality-based escalation (post-1.0, opt-in).
-- More than one local and one cloud model (planned for v0.6.0, see below).
 - Provider-format translation (non-OpenAI-compatible APIs).
 - Per-user budgets, quotas, multi-tenant auth.
 - Hot config reload.
@@ -166,7 +174,7 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 
 ## Planned for 1.0
 
-This spec describes v1 as two targets. The project now aims to be an open-source product, and the roadmap in [README.md](README.md#roadmap) extends it: N cost-ordered tiers (v0.6.0), `slm-router calibrate` to retrain the classifier on the user's own models (v0.7.0), and install tooling (v0.8.0). Each milestone updates this spec when it lands.
+This spec describes v1 as two targets; the **Tiers** section records how v0.6.0 generalised them to N cost-ordered tiers. The roadmap in [README.md](README.md#roadmap) continues with `slm-router calibrate` to retrain the classifier on the user's own models (v0.7.0), and install tooling (v0.8.0). Each milestone updates this spec when it lands.
 
 ## Further Notes
 
