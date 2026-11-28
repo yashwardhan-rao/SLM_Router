@@ -52,6 +52,14 @@ pub enum Command {
         /// JSONL, one `{"prompt": "...", "label": "local" | "cloud"}` per line.
         #[arg(long)]
         labels: String,
+        /// Instead of best F1: catch the most cloud prompts while keeping at least this share
+        /// of local prompts local, e.g. 0.95.
+        #[arg(long, value_parser = crate::calibrate::fraction, conflicts_with = "max_false_local")]
+        min_local_recall: Option<f64>,
+        /// Instead of best F1: keep the most local prompts local while wrongly keeping at most
+        /// this share of cloud prompts local, e.g. 0.05.
+        #[arg(long, value_parser = crate::calibrate::fraction)]
+        max_false_local: Option<f64>,
     },
     /// Write the documented example config to start from.
     Init {

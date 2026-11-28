@@ -58,11 +58,29 @@ fn stats_takes_config_and_since() {
 #[test]
 fn calibrate_takes_config_and_requires_labels() {
     let cli = parse(&["calibrate", "--labels", "f.jsonl", "--config", "c.toml"]).unwrap();
-    let Command::Calibrate { config, labels } = cli.command else {
+    let Command::Calibrate {
+        config,
+        labels,
+        min_local_recall,
+        max_false_local,
+    } = cli.command
+    else {
         panic!("expected calibrate")
     };
     assert_eq!((config.as_str(), labels.as_str()), ("c.toml", "f.jsonl"));
+    assert_eq!((min_local_recall, max_false_local), (None, None));
     assert!(parse(&["calibrate"]).is_err());
+    let cli = parse(&["calibrate", "--labels", "f", "--min-local-recall", "0.95"]).unwrap();
+    let Command::Calibrate {
+        min_local_recall, ..
+    } = cli.command
+    else {
+        panic!("expected calibrate")
+    };
+    assert_eq!(min_local_recall, Some(0.95));
+    let both = ["--min-local-recall", "0.9", "--max-false-local", "0.1"];
+    assert!(parse(&[&["calibrate", "--labels", "f"][..], &both].concat()).is_err());
+    assert!(parse(&["calibrate", "--labels", "f", "--max-false-local", "2"]).is_err());
 }
 
 #[test]

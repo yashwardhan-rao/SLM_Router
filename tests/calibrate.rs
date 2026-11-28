@@ -2,7 +2,7 @@ mod common;
 
 use common::*;
 use serde_json::json;
-use slm_router::calibrate::{self, Labelled, Outcome, parse, render, threshold};
+use slm_router::calibrate::{self, Labelled, Metrics, Outcome, Target, parse, render, threshold};
 use slm_router::routing::RoutingConfig;
 
 fn row(prompt: &str, cloud: bool) -> Labelled {
@@ -36,36 +36,54 @@ fn parse_names_the_malformed_line() {
 #[test]
 fn empty_or_cloud_only_input_is_an_error() {
     let cfg = RoutingConfig::default();
-    assert!(threshold(&parse("\n\n").unwrap(), &cfg).is_err());
-    let err = threshold(&[row(HARD, true)], &cfg).unwrap_err();
+    assert!(
+        threshold(
+            &parse(
+                "
+
+"
+            )
+            .unwrap(),
+            &cfg,
+            Target::F1
+        )
+        .is_err()
+    );
+    let err = threshold(&[row(HARD, true)], &cfg, Target::F1).unwrap_err();
     assert!(err.contains("no local rows"), "{err}");
 }
 
 #[test]
-fn threshold_is_highest_local_score_plus_margin() {
+fn suggestion_comes_from_real_scores_and_matches_its_metrics() {
     let cfg = RoutingConfig::default();
     let rows = [row(EASY, false), row(EASY2, false), row(HARD, true)];
-    let o = threshold(&rows, &cfg).unwrap();
+    let o = threshold(&rows, &cfg, Target::F1).unwrap();
+    let (s, c) = (o.suggested, o.current);
+    assert_eq!((s.local, s.cloud, o.excluded), (2, 1, 0));
+    assert_eq!(
+        (c.threshold, c.local, c.cloud),
+        (cfg.classifier_threshold, 2, 1)
+    );
+    // The strict row is the old rule: just above the highest local score.
     let max = [EASY, EASY2]
         .map(|p| calibrate::score(p, &cfg).unwrap())
         .into_iter()
         .fold(0.0f32, f32::max);
-    assert!(o.threshold >= max + calibrate::MARGIN, "{o:?} {max}");
-    assert!(o.threshold < max + calibrate::MARGIN + 0.001, "{o:?} {max}");
-    assert_eq!((o.local, o.cloud, o.excluded), (2, 1, 0));
+    assert!(o.strict.threshold > max, "{o:?} {max}");
+    assert_eq!(o.strict.local_kept, 2);
 }
 
 #[test]
 fn long_prompts_are_excluded_and_all_long_locals_is_no_local_rows() {
     let cfg = RoutingConfig::default();
     let long = "word ".repeat(cfg.complex_prompt_tokens + 10);
-    let o = threshold(
-        &[row(EASY, false), row(&long, false), row(&long, true)],
-        &cfg,
-    )
-    .unwrap();
-    assert_eq!((o.local, o.cloud, o.excluded), (1, 0, 2));
-    let err = threshold(&[row(&long, false), row(HARD, true)], &cfg).unwrap_err();
+    let rows = [row(EASY, false), row(&long, false), row(&long, true)];
+    let o = threshold(&rows, &cfg, Target::MinLocalRecall(1.0)).unwrap();
+    assert_eq!(
+        (o.suggested.local, o.suggested.cloud, o.excluded),
+        (1, 0, 2)
+    );
+    let err = threshold(&[row(&long, false), row(HARD, true)], &cfg, Target::F1).unwrap_err();
     assert!(err.contains("no local rows"), "{err}");
 }
 
@@ -81,37 +99,75 @@ fn score_ignores_a_disabled_threshold() {
     );
 }
 
+fn m(t: f32, local: usize, kept: usize, cloud: usize, caught: usize) -> Metrics {
+    Metrics {
+        threshold: t,
+        local,
+        local_kept: kept,
+        cloud,
+        cloud_caught: caught,
+    }
+}
+
+#[test]
+fn render_prints_the_table_before_the_suggestion() {
+    let o = Outcome {
+        target: Target::MinLocalRecall(0.95),
+        suggested: m(0.512, 40, 38, 10, 9),
+        current: m(0.781, 40, 40, 10, 5),
+        strict: m(0.99, 40, 40, 10, 0),
+        excluded: 1,
+    };
+    let out = render(&o);
+    let lines: Vec<&str> = out.lines().collect();
+    assert!(
+        lines[0].contains("threshold") && lines[0].contains("false local"),
+        "{out}"
+    );
+    for (line, want) in lines[1..4].iter().zip([
+        ["suggested (kept>=95%)", "0.512", "95.0%", "10.0%", "94.0%"],
+        ["current", "0.781", "100.0%", "50.0%", "90.0%"],
+        ["strict (keep all)", "0.990", "100.0%", "100.0%", "80.0%"],
+    ]) {
+        for w in want {
+            assert!(line.contains(w), "{w} in {line:?}");
+        }
+    }
+    assert!(
+        out.contains(
+            "
+classifier_threshold = 0.512
+"
+        ),
+        "{out}"
+    );
+    assert!(
+        out.contains("40 local, 10 cloud (1 over") && !out.contains("warning"),
+        "{out}"
+    );
+}
+
 #[test]
 fn render_notes_disabling_thresholds_few_rows_and_no_cloud_rows() {
     let o = Outcome {
-        threshold: 1.013,
-        local: 3,
-        cloud: 0,
-        excluded: 1,
-        caught: 0,
+        target: Target::MinLocalRecall(1.0),
+        suggested: m(1.013, 3, 3, 0, 0),
+        current: m(0.78, 3, 3, 0, 0),
+        strict: m(1.013, 3, 3, 0, 0),
+        excluded: 0,
     };
-    let out = render(&o, 0.78);
-    assert!(out.starts_with("classifier_threshold = 1.013"), "{out}");
-    for want in [
-        "disables the classifier",
-        "only 3 local rows",
-        "n/a",
-        "0.780",
-    ] {
+    let out = render(&o);
+    for want in ["disables the classifier", "only 3 local rows", "n/a"] {
         assert!(out.contains(want), "{want}: {out}");
     }
-    let o = Outcome {
-        threshold: 0.5,
-        local: 40,
-        cloud: 4,
-        excluded: 0,
-        caught: 3,
-    };
-    let out = render(&o, 0.78);
-    assert!(
-        out.contains("3 / 4 (75.0%)") && !out.contains("warning"),
-        "{out}"
-    );
+}
+
+#[test]
+fn fraction_accepts_0_to_1_only() {
+    assert_eq!(calibrate::fraction("0.95"), Ok(0.95));
+    for bad in ["1.5", "-0.1", "x", "NaN"] {
+        assert!(calibrate::fraction(bad).is_err(), "{bad}");
+    }
 }
 
 #[tokio::test]

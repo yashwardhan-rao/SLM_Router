@@ -62,16 +62,22 @@ async fn run(cli: Cli) -> Result<(), String> {
             }
             Ok(())
         }
-        Command::Calibrate { config, labels } => {
+        Command::Calibrate {
+            config,
+            labels,
+            min_local_recall,
+            max_false_local,
+        } => {
             let cfg = offline_config(&config)?;
             let text = std::fs::read_to_string(&labels)
                 .map_err(|e| format!("cannot read {labels}: {e}"))?;
-            let rows = calibrate::parse(&text)?;
-            let out = calibrate::threshold(&rows, &cfg.routing)?;
-            println!(
-                "{}",
-                calibrate::render(&out, cfg.routing.classifier_threshold)
-            );
+            let target = match (min_local_recall, max_false_local) {
+                (Some(r), _) => calibrate::Target::MinLocalRecall(r),
+                (_, Some(f)) => calibrate::Target::MaxFalseLocal(f),
+                _ => calibrate::Target::F1,
+            };
+            let out = calibrate::threshold(&calibrate::parse(&text)?, &cfg.routing, target)?;
+            println!("{}", calibrate::render(&out));
             Ok(())
         }
         Command::Init { path, force } => {
