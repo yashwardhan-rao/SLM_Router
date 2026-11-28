@@ -68,21 +68,23 @@ max_context_tokens = 4096
 [[tier]]
 name = "mid"
 base_url = "https://api.groq.com/openai/v1"
-model = "llama-3.3-70b-versatile"
+model = "openai/gpt-oss-120b"
 api_key_env = "GROQ_API_KEY"
 supports_tools = true
-input_per_mtok = 0.59
-output_per_mtok = 0.79
+input_per_mtok = 0.15
+output_per_mtok = 0.60
 
 [[tier]]
 name = "top"
 base_url = "https://api.openai.com/v1"
-model = "gpt-4o"
+# gpt-6.2-sol is a reasoning model: clients should omit `temperature` and `top_p`, and send tool
+# calls through /v1/responses rather than chat completions.
+model = "gpt-6.2-sol"
 api_key_env = "OPENAI_API_KEY"
 supports_tools = true
 stateful = true
 hard = true
-input_per_mtok = 2.50
+input_per_mtok = 2.00
 output_per_mtok = 10.00
 ```
 
@@ -90,7 +92,8 @@ output_per_mtok = 10.00
 - `local-only` keeps requests on `local = true` tiers. `cloud-only` keeps them off those tiers.
 - Pins and failover only move up the ladder. Each tier has its own circuit breaker; set `breaker_failures = 0` to turn it off.
 - `slm-router/<name>` forces a tier. The `slm-router/local` and `slm-router/cloud` aliases force the cheapest local or remote tier.
-- `saved_usd` is measured against the top tier. The prices above are placeholders; set your providers' real ones.
+- `saved_usd` is measured against the top tier. The prices above are the providers' listed standard rates on 2026-11-28; check them before relying on the figure.
+- Anthropic's OpenAI-compatible endpoint is not a supported tier yet: it rejects common client fields (any `temperature` below 1 on current models, a non-default `top_p`, `n` > 1, `json_object`) and has no `/v1/responses`. The example config explains the details.
 - Each log line records the tier that answered in `tier`, and `target` still says `local` or `cloud`.
 
 ## Quickstart
@@ -192,9 +195,9 @@ Why the dollars did not move: most of the raw saving the keyword router appeared
 
 One live run of the release binary against Ollama 0.40.18 (`llama3.2:1b` local, `qwen2.5-coder:7b` standing in for cloud): 4 requests, 3 of them streamed, all with `tokens_estimated: false`. Before v0.5.0 every streamed chat request was estimated, because neither Ollama nor OpenAI send usage on a stream unless asked. Clients that did not set `include_usage` received no `choices: []` chunk. A CUDA prompt with no cue words went to cloud with `classifier_score` 0.942; "hi" scored 0.339.
 
-### v1.0.0: sample `slm-router report`
+### v0.9.0-rc.1: sample `slm-router report`
 
-Smoke test of the 1.0.0 release binary against Ollama 0.40.18: one auto request ("What is the capital of France?") and one forced to `slm-router/cloud`, with `qwen2.5-coder:7b` on Ollama standing in for the cloud and placeholder prices of $2.50 / $10.00 per million tokens. The excerpt below is `slm-router report --since 1h`; the full output adds reason and tier tables, and `report --json` gives the same numbers as JSON.
+Smoke test of this release candidate's release-mode binary against Ollama 0.40.18: one auto request ("What is the capital of France?") and one forced to `slm-router/cloud`, with `qwen2.5-coder:7b` on Ollama standing in for the cloud and placeholder prices of $2.50 / $10.00 per million tokens. The excerpt below is `slm-router report --since 1h`; the full output adds reason and tier tables, and `report --json` gives the same numbers as JSON.
 
 | Metric | Value |
 | :--- | ---: |
@@ -243,7 +246,7 @@ One run of `python scripts/bench.py --skip-complex` against a release build (`se
 | `local.base_url`, `local.model` | Ollama `/v1`, `llama3.2` | Local target. |
 | `local.first_byte_timeout_ms` | 15000 | Wait before failing over; keep it above a cold model load. |
 | `local.breaker_failures`, `local.breaker_cooldown_ms` | 2, 30000 | Circuit breaker. `0` disables it. |
-| `cloud.base_url`, `cloud.model`, `cloud.api_key_env` | OpenAI, `gpt-4o`, `OPENAI_API_KEY` | Cloud target; the key is read from the named variable. |
+| `cloud.base_url`, `cloud.model`, `cloud.api_key_env` | OpenAI, `gpt-6.2-sol` (in the example config), `OPENAI_API_KEY` | Cloud target; the key is read from the named variable. |
 | `routing.local_supports_tools` | `false` | Skip Rule 3 for a local model that handles tools and images. |
 | `routing.local_max_context_tokens` | 4096 | Match Ollama's loaded context. 512 is reserved for the reply. |
 | `routing.complex_prompt_tokens` | 1500 | Rule 5 length trigger. |
@@ -262,7 +265,8 @@ slm-router serve [--config FILE] [--bind ADDR] [--warmup]   # run the proxy
 slm-router stats [--config FILE] [--since 24h]              # counts, % local, tokens kept local, saved USD, p50/p95,
                                                             # routing reasons, errors, client disconnects, estimated tokens
 slm-router report [--config FILE] [--since 24h] [--json]    # the same numbers as a Markdown report, or JSON
-slm-router calibrate --labels FILE [--config FILE]          # suggest classifier_threshold from your own labelled prompts
+slm-router calibrate --labels FILE [--config FILE] \
+  [--min-local-recall 0.95 | --max-false-local 0.05]         # suggest classifier_threshold from your own labelled prompts
 slm-router init [--path slm-router.toml] [--force]          # write the documented example config
 
 python scripts/eval.py --log slm-router.jsonl               # live routing eval against a running router
@@ -271,7 +275,16 @@ python scripts/eval.py --log slm-router.jsonl \
 python scripts/bench.py --skip-complex                      # v1 local latency benchmark
 ```
 
-**Calibrating the classifier on your own models.** `calibrate` reads JSONL rows of `{"prompt": "...", "label": "local" | "cloud"}`, where `cloud` means your local model's answer was not good enough. It scores each prompt with the embedded classifier, exactly as the router logs `classifier_score`, and prints the lowest `classifier_threshold` that keeps every `local` prompt local, plus 0.02 (the rule `scripts/train.py` uses). It also prints how many `cloud` prompts rule 5 would catch at that threshold. Paste the value into `[routing]`; the config is never rewritten. Build the file from prompts you actually send, labelling each by whether your local model's answer was good enough. The log cannot supply them: it holds metadata only, never prompt text. Retraining the model itself still uses the Python pipeline below.
+**Calibrating the classifier on your own models.** `calibrate` reads JSONL rows of `{"prompt": "...", "label": "local" | "cloud"}`, where `cloud` means your local model's answer was not good enough. It scores each prompt with the embedded classifier, exactly as the router logs `classifier_score`, and suggests the `classifier_threshold` with the best F1 at catching `cloud` prompts. `--min-local-recall 0.95` instead catches the most cloud prompts while keeping at least 95% of local prompts local, and `--max-false-local 0.05` keeps the most local prompts local while letting at most 5% of cloud prompts stay local. Because the suggestion optimises a target rather than keeping every local prompt local, one noisy or mislabelled prompt cannot push it to an extreme. Before the suggestion it prints a table comparing the suggested threshold, the current one, and the strict keep-every-local-prompt threshold (the rule `scripts/train.py` uses), each with local retention, false-local rate and accuracy on your file:
+
+```
+                        threshold  local kept  false local  accuracy
+suggested (best F1)         0.699       96.2%         8.2%     94.0%
+current                     0.781       98.7%        13.7%     92.7%
+strict (keep all)           0.945      100.0%        41.1%     80.1%
+```
+
+Paste the value into `[routing]`; the config is never rewritten. Build the file from prompts you actually send, labelling each by whether your local model's answer was good enough. The log cannot supply them: it holds metadata only, never prompt text. Retraining the model itself still uses the Python pipeline below.
 
 **Request headers:** `X-Session-Id` (explicit session for pinning), `X-Router-Policy` (tighten policy for one request), `Authorization: Bearer $ROUTER_API_KEY` (when set). The client's `Authorization` header is never forwarded upstream.
 
@@ -300,6 +313,12 @@ cargo clippy --all-targets -- -D warnings && cargo test
 
 ```sh
 cargo test --release
+```
+
+**Live cloud tests.** `tests/live_cloud.rs` boots the real binary with local Ollama as tier 1 and a real cloud provider as tier 2. It checks five cases: a local auto request, a forced-cloud request, a cloud stream (intact SSE, usage chunk hidden, exact token counts in the log), tool calling with a round trip, and failover from a dead local port. The tests are `#[ignore]`, so the fast check never runs them. They need `GROQ_API_KEY` or `OPENAI_API_KEY`, and spend a few cents at most:
+
+```sh
+cargo test --test live_cloud -- --ignored --test-threads=1 --nocapture
 ```
 
 **Reproduce the Rule 5 model.** Prompts and judge labels are tracked in `data/`; the scripts are standard-library Python.
@@ -358,19 +377,17 @@ Completed work is ticked below. The full release history is in [CHANGELOG.md](CH
 - [x] v0.4.0: embedded Rule 5 classifier trained on judged synthetic prompts
 - [x] v0.5.0: exact streaming token counts, `classifier_score` in the log, `stats` by reason and outcome
 - [x] v0.6.0: N tiers, `[[tier]]` config, failover and pins up the ladder, `tier` in the log
-- [x] v0.7.0: `slm-router calibrate` suggests `classifier_threshold` from your own labelled prompts
-- [x] v0.8.0: `slm-router init`, `[[tier]]` pricing presets, macOS build, Dockerfile, systemd unit
-- [x] v1.0.0: config `version`, frozen log and `report --json` schemas, `slm-router report`, semver
+- [x] v0.9.0-rc.1: `slm-router calibrate`, `init` with `[[tier]]` presets, `report`, config `version`, frozen log and `report --json` schemas, macOS build, Dockerfile, systemd unit
+- [ ] v1.0.0: the stable release, once packaging, presets and real cloud endpoints are verified; semver from there on
 
-**What 1.0 is.** One binary. Point your OpenAI SDK at it. It answers easy prompts with your local model, sends hard ones to the cheapest cloud model that can handle them, never lets private prompts leave your machine, and shows how much you saved.
+**Where 1.0 is headed.** One binary. Point your OpenAI SDK at it. It answers easy prompts with your local model, sends hard ones to the cheapest cloud model that can handle them, never lets private prompts leave your machine, and shows how much you saved.
 
 | Version | Theme | Main items |
 | :--- | :--- | :--- |
 | v0.5.0 | Trustworthy numbers | exact streaming usage (`include_usage`, with the usage chunk stripped when the client did not ask for it), per-reason `stats`, classifier score in the log |
 | v0.6.0 | N tiers | any number of OpenAI-compatible targets with price and capabilities; `decide()` picks the cheapest tier predicted to succeed; failover and pins move up the ladder only |
-| v0.7.0 | Calibrate | `slm-router calibrate` tunes the classifier threshold on prompts labelled for your own models (retraining stays in Python; per-tier thresholds deferred past 1.0) |
-| v0.8.0 | Adoption | `slm-router init` writes the example config with editable `[[tier]]` pricing presets; macOS build, Dockerfile, example systemd unit |
-| v1.0.0 | Stable | versioned config and log schemas, `slm-router report` (Markdown or `--json`), semver from here on; the stable surface is listed in [SPEC.md](SPEC.md#stability-v100) |
+| v0.9.0-rc.1 | Calibrate and adoption | `slm-router calibrate` tunes the classifier threshold on your own labelled prompts (retraining stays in Python; per-tier thresholds deferred past 1.0); `init` with `[[tier]]` presets; `report` (Markdown or `--json`); versioned config and log schemas; macOS build, Dockerfile, example systemd unit |
+| v1.0.0 (planned) | Stable | the same surface, once packaging, presets and real cloud endpoints are verified; semver from there on; the planned stable surface is listed in [SPEC.md](SPEC.md#stability-planned-for-100) |
 
 Post-1.0, opt-in only: speculative verification (try a cheap tier, escalate on a weak answer), a multi-turn-aware classifier, a semantic cache.
 

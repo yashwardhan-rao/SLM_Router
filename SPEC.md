@@ -72,7 +72,7 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 
 **Stack**
 - Rust. axum and tokio for serving, reqwest for upstream calls, serde for typed request/response boundaries, clap for the CLI. No provider SDKs, no LiteLLM.
-- Both upstreams are OpenAI-compatible `/v1/chat/completions`: Ollama's OpenAI endpoint and any OpenAI-compatible cloud endpoint (OpenAI, Groq, or Anthropic's compatibility endpoint). No request or response translation.
+- Both upstreams are OpenAI-compatible `/v1/chat/completions`: Ollama's OpenAI endpoint and any OpenAI-compatible cloud endpoint (OpenAI, Groq). No request or response translation. Anthropic's compatibility endpoint is not supported: it rejects fields OpenAI clients commonly send (see the example config).
 - Unknown request fields are preserved and forwarded. Known fields the router reads (model, messages, stream, tools, tool_choice, response_format) are typed.
 
 **Tiers (v0.6.0)**
@@ -108,7 +108,7 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 - Probability: `sigmoid(bias + sparse + dense . w_dense)`.
 - Binary format, little-endian, 65,574 bytes: magic `SLR5`, u16 version (1), u32 bucket count (65536), f32 sparse scale, f32 bias, f32 calibrated threshold, 4 x f32 dense weights, then 65536 x i8 sparse weights (weight = i8 x scale).
 - The threshold is calibrated on the dev split only: the lowest value that sends no easy prompt to cloud, plus 0.02. The holdout split is never used to train or tune.
-- `slm-router calibrate --labels FILE` (v0.7.0) applies the same rule to the user's own prompts. Input is JSONL `{"prompt", "label": "local" | "cloud"}`, other fields ignored, blank lines skipped; a malformed line or unknown label is an error naming its 1-based line. Each prompt is scored as a one-message request, exactly as the log's `classifier_score` (even when the configured threshold disables the classifier). Prompts over `complex_prompt_tokens` are skipped and counted. The suggestion is the highest `local` score plus 0.02, rounded up to 3 decimals; no scored `local` row is an error. It prints the share of `cloud` rows rule 5 catches at that threshold (cues or classifier), notes when the value is above 1.0 (disables the classifier), and warns under 20 `local` rows. It never writes the config and does no I/O beyond reading the two files.
+- `slm-router calibrate --labels FILE` tunes the threshold on the user's own prompts. Input is JSONL `{"prompt", "label": "local" | "cloud"}`, other fields ignored, blank lines skipped; a malformed line or unknown label is an error naming its 1-based line. Each prompt is scored as a one-message request, exactly as the log's `classifier_score` (even when the configured threshold disables the classifier). Prompts over `complex_prompt_tokens` are skipped and counted. Rule 5 is applied as the router applies it: a row goes to cloud when its cues reach `complexity_threshold` or its score reaches the threshold. Candidate thresholds are one per gap between distinct scores (midway, on 3 decimals; above the top score, that score plus 0.02; ties are never split), and the suggestion is the candidate that best meets the target: by default the best F1 with `cloud` as the positive class (ties: higher local retention; needs at least one `cloud` row); with `--min-local-recall R`, the most `cloud` rows caught among candidates keeping at least R of `local` rows local (an error if cues alone make R unreachable); with `--max-false-local F`, the most `local` rows kept among candidates keeping at most F of `cloud` rows local. The two flags take 0 to 1 and exclude each other. No scored `local` row is an error. Before the suggestion it prints a table of threshold, local retention, false-local rate and accuracy for the suggestion, the current threshold, and the strict rule (the most `local` rows kept, then the most `cloud` rows caught: the `scripts/train.py` rule). It notes when the value is above 1.0 (disables the classifier) and warns under 20 `local` rows. It never writes the config and does no I/O beyond reading the two files.
 
 **Policy**
 - Values: `auto` (default), `local-only`, `cloud-only`. Set in config and tightened per request via `X-Router-Policy`. A header can never loosen the config.
@@ -135,8 +135,8 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 - Optional bearer token protects the router. Cloud keys are read from the environment variable named in config. The client's Authorization header is never forwarded upstream.
 
 **Config and CLI**
-- Single TOML file with an optional top-level `version` (absent or 1; any other value is rejected at load, since v1.0.0) and sections for server, local + cloud or `[[tier]]`, routing, pricing, session and log. Secrets are never in the file; the config names the env var. Loaded once at startup into typed, validated structs; no hot reload. Invalid config exits non-zero with a clear message.
-- CLI subcommands: `serve` (with `--warmup` and `--bind`), `stats`, `report [--since] [--json]` (since v1.0.0), `calibrate --labels FILE` (since v0.7.0), and `init [--path] [--force]` (since v0.8.0), which writes the example config compiled into the binary. It refuses an existing file without `--force`, never creates directories, and writes a temp file in the target's directory that is renamed into place.
+- Single TOML file with an optional top-level `version` (absent or 1; any other value is rejected at load, since v0.9.0-rc.1) and sections for server, local + cloud or `[[tier]]`, routing, pricing, session and log. Secrets are never in the file; the config names the env var. Loaded once at startup into typed, validated structs; no hot reload. Invalid config exits non-zero with a clear message.
+- CLI subcommands: `serve` (with `--warmup` and `--bind`), `stats`, `report [--since] [--json]`, `calibrate --labels FILE` and `init [--path] [--force]` (all since v0.9.0-rc.1), which writes the example config compiled into the binary. It refuses an existing file without `--force`, never creates directories, and writes a temp file in the target's directory that is renamed into place.
 - `--warmup` sends one tiny request to the local model at startup.
 
 **Logging and stats**
@@ -144,7 +144,7 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 - Saved USD is the counterfactual cloud cost for requests served locally, using optional configured cloud input/output prices per million tokens. Local cost is treated as zero (electricity and hardware ignored). Null when pricing is absent; cloud-served requests save zero.
 - Metadata only. Never prompt or completion text, never keys. A write failure warns on stderr and never fails the request. No rotation in v1.
 - `stats` aggregates the file: counts by target and by tier, failovers, percent local, tokens kept local, total saved, p50/p95 latency per target, with an optional `--since` window.
-- `report` (v1.0.0) renders the same aggregation as Markdown (overview, latency, reasons, tiers, errors), or as JSON with `--json`. A missing log gives a zero summary. Log lines with a `v` other than 1 are counted as skipped, never misread; a line without `v` is read as version 1.
+- `report` renders the same aggregation as Markdown (overview, latency, reasons, tiers, errors), or as JSON with `--json`. A missing log gives a zero summary. Log lines with a `v` other than 1 are counted as skipped, never misread; a line without `v` is read as version 1.
 
 **Verification**
 - The single fast check is `cargo clippy --all-targets -- -D warnings && cargo test`. It needs no network and no Ollama.
@@ -160,9 +160,9 @@ SLM_Router v1 is a headless, single-binary, OpenAI-compatible proxy. A client po
 - Shared helpers live in `tests/common/` (fake upstreams that can refuse, hang, error, stream slowly or die mid-stream, a router rig, log readers); new tests reuse them.
 - A manual smoke test against real Ollama and a real cloud key is documented but is not part of the fast check.
 
-## Stability (v1.0.0)
+## Stability (planned for 1.0.0)
 
-From 1.0.0 the project follows semver. Within 1.x the following are stable. They may gain optional additions, but they never lose a field or change meaning without a major version:
+From 1.0.0 the project will follow semver. Within 1.x the following will be stable. They may gain optional additions, but they will never lose a field or change meaning without a major version. The 0.9.0 release candidates already ship this surface:
 
 - **HTTP:** `POST /v1/chat/completions`, `POST /v1/responses`, `GET /v1/models`, the reserved model ids, the `X-Session-Id` and `X-Router-Policy` headers, and the OpenAI error body shape.
 - **Config schema version 1:** every key documented in `slm-router.example.toml`, in both the legacy and the `[[tier]]` form. A config that declares another `version` is rejected.
@@ -181,16 +181,15 @@ From 1.0.0 the project follows semver. Within 1.x the following are stable. They
 - Prometheus or other metrics endpoints.
 - Embeddings, legacy completions and other OpenAI endpoints besides chat completions and the models list.
 - Log rotation, log shipping, persistent pins.
-- Windows-service packaging, installers and published container images (a `Dockerfile` and an example systemd unit ship in the repo since v0.8.0).
+- Windows-service packaging, installers and published container images (a `Dockerfile` and an example systemd unit ship in the repo since v0.9.0-rc.1).
 - A published client SDK (the importable routing function is the only library surface).
 - Counting electricity or hardware cost in savings.
 
-## Road to 1.0 (done)
+## Road to 1.0
 
 - v0.6.0 generalised the two targets to N cost-ordered tiers.
-- v0.7.0 added `slm-router calibrate`, which tunes the threshold only; retraining stays in `scripts/train.py`.
-- v0.8.0 added `init` and the install tooling.
-- v1.0.0 froze the schemas above and added `report`.
+- v0.9.0-rc.1 added `slm-router calibrate` (threshold tuning only; retraining stays in `scripts/train.py`), `init` and the install tooling, and `report`, and froze the schemas above.
+- 1.0.0 follows once packaging, presets and real cloud endpoints are verified.
 
 Per-tier thresholds, speculative verification, a multi-turn classifier and a semantic cache come after 1.0, and only as opt-in features.
 

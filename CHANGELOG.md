@@ -2,29 +2,29 @@
 
 Notable changes to SLM_Router. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/). From 1.0.0 on, the surface listed under Stability in [SPEC.md](SPEC.md) only changes in a major version; before 1.0.0 a minor version could change defaults or config.
 
-## [1.0.0] - 2026-11-28
+## [0.9.0-rc.1] - 2026-11-28
+
+Release candidate for 1.0.0. It replaces the 0.7.0, 0.8.0 and 1.0.0 version numbers used during development, none of which were tagged. 1.0.0 follows once packaging, presets and real cloud endpoints are verified.
 
 ### Added
 - `slm-router report [--since] [--json]` prints the log summary as a Markdown report (overview, latency, reasons, tiers, errors), or with `--json` as JSON (schema version 1) for scripts. It uses the same aggregation as `stats`, so the numbers always match. A missing log gives a zero summary.
-- Optional top-level config `version`. Absent or `1` is accepted, and any other value is rejected at startup with a clear message. The example config now sets `version = 1`.
-- SPEC lists the stable 1.x surface: the endpoints, config schema 1, log schema 1 (its 21 fields, reasons and outcomes, pinned by a test), `report --json` schema 1, the CLI and `decide()`.
-
-### Changed
-- `stats` and `report` skip log lines whose `v` is not 1 instead of misreading them. Lines without `v` are still read as version 1.
-- Semantic versioning applies from this release.
-
-## [0.8.0] - 2026-11-28
-
-### Added
+- `slm-router calibrate --labels FILE` scores your own prompts labelled `local` or `cloud` with the embedded classifier and suggests a `classifier_threshold`. It optimises a target rather than keeping every local prompt local, so one noisy or mislabelled prompt cannot push the threshold to an extreme. The default is the best F1 at catching cloud prompts; `--min-local-recall R` or `--max-false-local F` switch to a retention floor or a false-local ceiling. Before the suggestion it prints a table comparing the suggested, current and strict thresholds by local retention, false-local rate and accuracy. Prompts over `complex_prompt_tokens` are skipped, and the config is never rewritten.
 - `slm-router init [--path FILE] [--force]` writes the documented example config, which is compiled into the binary. It refuses to overwrite an existing file without `--force`, and writes through a temp file in the same directory so a failed write never leaves half a config.
-- `[[tier]]` presets in the example config for local Ollama, Groq, Anthropic's OpenAI-compatible endpoint and OpenAI, with placeholder prices to check against each provider.
+- `[[tier]]` presets in the example config at the providers' listed prices on 2026-11-28:
+  - local Ollama (unpriced);
+  - Groq `openai/gpt-oss-120b` ($0.15 / $0.60);
+  - OpenAI `gpt-6.2-sol` ($2.00 / $10.00). It is a reasoning model, so omit `temperature` and `top_p`, and use `/v1/responses` for tool calling.
+
+  There is no Anthropic preset: its OpenAI-compatible endpoint rejects fields clients commonly send, such as `temperature` below 1 on current models.
+- Optional top-level config `version`. Absent or `1` is accepted, and any other value is rejected at startup with a clear message. The example config sets `version = 1`.
 - macOS (Apple silicon) binary `slm-router-macos-aarch64` on each release.
 - `Dockerfile` (non-root Debian image, `serve --bind 0.0.0.0:8080`) and `contrib/slm-router.service`, an example systemd unit. No image is published.
+- SPEC lists the surface planned to be stable from 1.0.0: the endpoints, config schema 1, log schema 1 (its 21 fields, reasons and outcomes, pinned by a test), `report --json` schema 1, the CLI and the `decide()` signature.
+- `tests/live_cloud.rs` runs five live checks against local Ollama and a real Groq or OpenAI tier: local routing, forced cloud, streaming with exact usage, tool calling and failover. It is ignored in the offline `cargo test`.
 
-## [0.7.0] - 2026-11-28
-
-### Added
-- `slm-router calibrate --labels FILE`: scores your own prompts labelled `local` or `cloud` with the embedded classifier and suggests a `classifier_threshold` (highest `local` score plus 0.02, the rule the shipped model was calibrated with), with the share of `cloud` prompts rule 5 would then catch. Prompts over `complex_prompt_tokens` are skipped, as rule 5 never scores them. The config is never rewritten.
+### Changed
+- The example config's cloud model is now `gpt-6.2-sol` instead of `gpt-4o`, which OpenAI retires from the API on 2027-01-14 along with `gpt-4o-mini`.
+- `stats` and `report` skip log lines whose `v` is not 1 instead of misreading them. Lines without `v` are still read as version 1.
 
 ## [0.6.0] - 2026-11-28
 
@@ -118,10 +118,8 @@ Notable changes to SLM_Router. The format follows [Keep a Changelog](https://kee
 - One metadata-only JSONL log line per request, and `slm-router stats [--since]`.
 - `slm-router.example.toml`, CI (fmt, clippy, tests) and `scripts/bench.py`.
 
-[Unreleased]: https://github.com/yashwardhan-rao/SLM_Router/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.8.0...v1.0.0
-[0.8.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.7.0...v0.8.0
-[0.7.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.6.0...v0.7.0
+[Unreleased]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.9.0-rc.1...HEAD
+[0.9.0-rc.1]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.6.0...v0.9.0-rc.1
 [0.6.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/yashwardhan-rao/SLM_Router/compare/v0.3.0...v0.4.0

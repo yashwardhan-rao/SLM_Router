@@ -1,4 +1,4 @@
-//! The v1 log schema is frozen at 1.0.0: any added, removed or renamed field fails here.
+//! The v1 log schema is frozen for 1.0.0: any added, removed or renamed field fails here.
 
 mod common;
 use common::*;
