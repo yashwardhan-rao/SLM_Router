@@ -6,6 +6,9 @@
 # Inside the container, point [local] base_url at http://host.docker.internal:11434/v1 and set
 # [log] path = "/var/lib/slm-router/slm-router.jsonl" so the log survives restarts.
 FROM rust:1-slim AS build
+# reqwest's TLS (rustls with aws-lc-rs) compiles C code; cmake and clang cover its build script.
+RUN apt-get update && apt-get install -y --no-install-recommends cmake clang \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY . .
 RUN cargo build --release --locked
